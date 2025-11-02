@@ -1,5 +1,4 @@
-[submodule "python/SigProc_Comm"]
-	path = python/SigProc_Comm
-	# url = git@github.com:ali-rasteh/SigProc_Comm.git
-	url = https://github.com/ali-rasteh/SigProc_Comm.git
+[submodule "python/sigcom-toolkit"]
+	path = python/sigcom-toolkit
+	url = https://github.com/ali-rasteh/sigcom-toolkit.git
 	branch = main
