@@ -1,4 +1,4 @@
 [submodule "python/sigcom-toolkit"]
-	path = python/sigcom-toolkit
+	path = python/sigcom_toolkit
 	url = https://github.com/ali-rasteh/sigcom-toolkit.git
 	branch = main

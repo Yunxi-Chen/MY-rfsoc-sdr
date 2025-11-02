@@ -1,5 +1,5 @@
 from .siversDoc import siversDocClass as doc
-from sigcom-toolkit.general import General
+from sigcom_toolkit.general import General
 
 
 class siversDefaults(General):

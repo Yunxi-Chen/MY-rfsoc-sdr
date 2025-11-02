@@ -1,7 +1,7 @@
 from backend import *
 from backend import be_np as np, be_scp as scipy
-from sigcom-toolkit.signal_utils import Signal_Utils
-from sigcom-toolkit.general import General
+from sigcom_toolkit.signal_utils import Signal_Utils
+from sigcom_toolkit.general import General
 try:
     from near_field import Sim as Near_Field_Model, RoomModel
 except:

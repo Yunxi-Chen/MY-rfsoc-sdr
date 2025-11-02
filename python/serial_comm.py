@@ -1,6 +1,6 @@
 from backend import *
 from backend import be_np as np, be_scp as scipy
-from sigcom-toolkit.general import General
+from sigcom_toolkit.general import General
 
 
 
