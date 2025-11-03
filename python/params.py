@@ -174,7 +174,11 @@ class Params_Class_Default(object):
         self.rotation_step_deg = 1                      # Turntable Rotation step in degrees
         self.rotation_delay = 0.0                       # Turntable between rotations delay in seconds
 
-
+        # matlab data transfer parameters
+        self.enable_matlab_stream = False          # If True, enables the MATLAB data transfer
+        # self.matlab_stream_ip = '10.20.9.65'     # Roberto IP address for the MATLAB data transfer
+        self.matlab_stream_ip = '10.20.38.213'     # IP address for the MATLAB data transfer
+        self.matlab_stream_port = 50007             # Port for the MATLAB data transfer
         # self.calc_params()
 
 
@@ -371,11 +375,11 @@ class Params_Class_Default(object):
 
 
         if self.files_dwnld_target == 'rfsoc':
-            self.files_to_download = ["*.py", "*.txt", "sigcom_toolkit/*.py"]
+            self.files_to_download = ["*.py", "*.txt", "SigProc_Comm/*.py"]
             # self.files_to_download.extend(["../vivado/sounder_fr3_if_ddr4_mimo_4x2/builds/project_v1-0-58_20241001-150336.bit", 
             #                 "../vivado/sounder_fr3_if_ddr4_mimo_4x2/builds/project_v1-0-58_20241001-150336.hwh"])
         elif self.files_dwnld_target == 'raspi':
-            self.files_to_download = ["*.py", "*.txt", "sigcom_toolkit/*.py", "linear_track/*.py", "linear_track/*.txt"]
+            self.files_to_download = ["*.py", "*.txt", "SigProc_Comm/*.py", "linear_track/*.py", "linear_track/*.txt"]
         
         if self.files_dwnld_target == 'rfsoc':
             self.params_to_modify = {"backend.py": {"import_pynq": True, "import_torch": False,
@@ -415,11 +419,11 @@ class Params_Class(Params_Class_Default):
         # parser.add_argument("--bit_file_path", type=str, default="./rfsoc.bit", help="Path to the bit file")
         # params = parser.parse_args()
 
-        self.controller_slave_ip = '10.18.251.169'
+        self.controller_slave_ip = '10.20.34.169' #'10.18.251.169' # 
         self.turntable_port = '/dev/ttyACM0'
         # self.turntable_port = 'COM4'
 
-        self.set_piradio_opt_gains = True
+        # self.set_piradio_opt_gains = True
         self.set_piradio_opt_losupp = True
         self.piradio_freq_sw_dly_default = 0.1
         self.piradio_gain_sw_dly_default = 0.1
@@ -448,7 +452,7 @@ class Params_Class(Params_Class_Default):
         # self.host_files_base_addr = "/home/wirelesslab914/ali/sounder_rfsoc/RFSoC_SDR/python/"
         self.host_files_base_addr = "/Users/alira/OneDrive/Desktop/Current_works/Channel_sounding/RFSoC_SDR_copy/"
         self.host_ip = '192.168.2.1'
-        # self.host_username = 'wirelesslab914'
+        #self.host_username = 'wirelesslab914'
         self.host_username = 'alira'
         self.host_password = ''
 
@@ -457,13 +461,14 @@ class Params_Class(Params_Class_Default):
         # self.measurement_type = 'plot_saved_signal'
         # self.measurement_type = 'RFSoC_demo_simple'
         # self.measurement_type = 'mmw_demo_simple'
-        # self.measurement_type = 'FR3_demo_simple'
-        self.measurement_type = 'FR3_demo_multi_freq'
+        self.measurement_type = 'FR3_demo_simple'
+        # self.measurement_type = 'FR3_demo_multi_freq'
         # self.measurement_type = 'FR3_nyu_3state'
         # self.measurement_type = 'FR3_nyu_13state'
         # self.measurement_type = 'FR3_ant_calib'
         # self.measurement_type = 'FR3_beamforming'
         # self.measurement_type = 'FR3_cfo'
+        # self.measurement_type = 'stream_to_matlab'
 
         # self.mode = 'client'
         self.mode = 'client_master'
@@ -481,7 +486,7 @@ class Params_Class(Params_Class_Default):
             self.rfsoc_server_ip='192.168.2.99'
         elif self.mode == 'client_master':
             self.send_signal=False
-            self.rfsoc_server_ip='192.168.2.99'
+            self.rfsoc_server_ip='192.168.3.1'
         elif self.mode == 'client_slave':
             self.send_signal=True
             # self.rfsoc_server_ip='192.168.2.99'
@@ -563,20 +568,20 @@ class Params_Class(Params_Class_Default):
             self.animate_plot_mode=[[h00], [rxtd00_r, rxtd00_i], [rxfd00]]
             self.rx_chain = ['sync_time', 'channel_est']
             self.control_piradio=True
-            self.freq_hop_config['list'] = [6.5e9]
-            self.tx_sig_sim = 'orthogonal'
+            self.freq_hop_config['list'] = [10.0e9] # [6.5e9, 8.75e9, 10.0e9, 15.0e9, 21.7e9] 
+            # self.tx_sig_sim = 'orthogonal'
             # self.sig_gen_mode = 'ZadoffChu'
             
             # self.save_list = ['signal']
             # self.measurement_configs = ["test"]
-            # self.n_save = 256
+            # self.n_save = 256 
+            # self.enable_matlab_stream = True
+            self.sig_gen_mode = 'ZadoffChu'
+            self.tx_sig_sim = 'shifted'
+            # self.tx_sig_sim = 'orthogonal'
 
 
-
-        elif self.measurement_type == 'FR3_demo_multi_freq':
-            self.animate_plot_mode=[[h00], [rxtd00_r, rxtd00_i], [rxfd00]]
-            self.rx_chain = ['sync_time', 'channel_est']
-            self.control_piradio=True
+        elif self.measurement_type == 'FR3_demo_mult':
             self.freq_hop_config['list'] = [6.5e9, 8.75e9, 10.0e9]
             self.tx_sig_sim = 'orthogonal'
             # self.sig_gen_mode = 'ZadoffChu'
@@ -632,7 +637,7 @@ class Params_Class(Params_Class_Default):
 
             self.save_list = ['signal']
             self.n_save = 32
-            self.measurement_configs = []
+            self.measurement_configs = [6.5]
             # self.measurement_configs.append("tx1_rx1_rx_rotate")
             self.measurement_configs.append("bf_phi_{}".format(self.steer_phi_deg))
 
@@ -697,16 +702,17 @@ class Params_Class(Params_Class_Default):
             self.animate_plot_mode=[[h00], [rxtd00_r, rxtd00_i], [rxfd00]]
 
             self.rx_chain = ['sync_time', 'channel_est']
-            self.use_turntable = True
+            self.use_turntable = False
             self.rotation_range_deg = [-60,60]
             self.rotation_step_deg = 10
             self.rotation_delay = 0.5
 
             self.control_piradio=True
-            self.freq_hop_config['list'] = [6.5e9, 8.75e9, 10.0e9, 15.0e9, 21.7e9]
+            self.freq_hop_config['list'] = [6.5e9] # [6.5e9, 8.75e9, 10.0e9, 15.0e9, 21.7e9]
 
             self.tx_sig_sim = 'shifted'
             self.sig_gen_mode = 'ZadoffChu'
+            
 
             # self.save_list = ['signal']
             self.save_format = 'mat'
@@ -746,6 +752,21 @@ class Params_Class(Params_Class_Default):
             self.n_save = 256
             self.measurement_configs = []
             self.measurement_configs.append("{}GHz_{}ppm".format(self.freq_hop_config['list'][0]/1e9, cfo_ppm))
+
+        elif self.measurement_type == 'stream_to_matlab':
+            self.animate_plot_mode=[[h00], [rxtd00_r, rxtd00_i], [rxfd00]]
+            self.rx_chain = ['sync_time', 'channel_est']
+            self.control_piradio = True
+            self.freq_hop_config['list'] = [6.5e9]
+     
+            self.enable_matlab_stream = True
+            self.sig_gen_mode = 'ZadoffChu'
+            self.tx_sig_sim = 'shifted'
+
+            
+            # self.save_list = ['signal']
+            # self.measurement_configs = ["test"]
+            # self.n_save = 256   
 
 
 
