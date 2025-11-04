@@ -6,7 +6,6 @@ try:
     from near_field import Sim as Near_Field_Model, RoomModel
 except:
     pass
-from tb4_aoa_viz.aoa_bridge import get_publish_fn
 
 
 
@@ -1184,10 +1183,15 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.n_samp_ch_sp = self.n_samples_ch // 2
 
         self.kf = Aoa1sKF(dt=0.1, sigma_meas_deg=np.sqrt(5.0), sigma_acc_deg=0.3)
-        self.publish_aoa = get_publish_fn("/aoa_angle")
+        if len(self.turtlebot_publish_list)>0:
+            from tb4_aoa_viz.aoa_bridge import get_publish_fn
+            if "aoa" in self.turtlebot_publish_list:
+                self.publish_aoa_turtlebot = get_publish_fn("/aoa_angle")
+            else:
+                self.publish_aoa_turtlebot = lambda x: None
 
 
-    
+
     def process_signals_for_plot(self, txtd_base, rxtd_base, h_est_full, H_est_full, sparse_est_params):
 
         '''
@@ -1518,7 +1522,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     self.line[line_id][j].set_data(np.arange(len(signal_data)), signal_data)
                     line_id+=1
                 elif signal_name == 'aoa_gauge':
-                    self.publish_aoa(signal_data)
+                    self.publish_aoa_turtlebot(signal_data)
                     self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data))
                     self.ax[i][j].set_xlim(0, 1)
                     self.ax[i][j].set_ylim(0.5, 1)

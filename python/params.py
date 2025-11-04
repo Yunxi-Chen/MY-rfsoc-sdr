@@ -181,6 +181,9 @@ class Params_Class_Default(object):
         self.matlab_stream_port = 50007             # Port for the MATLAB data transfer
         # self.calc_params()
 
+        # Turtlebot connection parameters
+        self.turtlebot_publish_list = []    # List of Turtlebot parameters to publish
+
 
 
     def calc_params(self):
@@ -459,7 +462,7 @@ class Params_Class(Params_Class_Default):
 
 
         # self.measurement_type = 'plot_saved_signal'
-        self.measurement_type = 'RFSoC_demo_simple'
+        # self.measurement_type = 'RFSoC_demo_simple'
         # self.measurement_type = 'mmw_demo_simple'
         # self.measurement_type = 'FR3_demo_simple'
         # self.measurement_type = 'FR3_demo_multi_freq'
@@ -469,6 +472,7 @@ class Params_Class(Params_Class_Default):
         # self.measurement_type = 'FR3_beamforming'
         # self.measurement_type = 'FR3_cfo'
         # self.measurement_type = 'stream_to_matlab'
+        self.measurement_type = 'turtlebot_demo'
 
         self.mode = 'client'
         # self.mode = 'client_master'
@@ -767,10 +771,20 @@ class Params_Class(Params_Class_Default):
             
             # self.save_list = ['signal']
             # self.measurement_configs = ["test"]
-            # self.n_save = 256   
+            # self.n_save = 256
 
 
+        elif self.measurement_type == 'turtlebot_demo':
 
+            self.animate_plot_mode = [[h00], [rxfd00, rxfd10], aoa_gauge]
 
+            self.rx_chain = ['sync_time', 'channel_est']
+
+            self.tx_sig_sim = 'same'
+            # self.sig_gen_mode = 'ZadoffChu'
+            self.sig_gen_mode = 'fft'
+            self.sig_modulation = '4qam'
+
+            self.turtlebot_publish_list = ["aoa"]
 
 
