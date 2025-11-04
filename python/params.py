@@ -431,7 +431,7 @@ class Params_Class(Params_Class_Default):
         self.piradio_freq_sw_dly_default = 0.1
         self.piradio_gain_sw_dly_default = 0.1
         self.piradio_bias_sw_dly_default = 0.1
-        self.ant_dx_m = 0.02               # Antenna spacing in meters
+        self.ant_dx_m = 0.026               # Antenna spacing in meters
         self.n_rx_ch_eq=1
         self.wb_sc_range=[-260,260]
         self.rx_same_delay=False
@@ -478,6 +478,7 @@ class Params_Class(Params_Class_Default):
         # self.mode = 'client_master'
         # self.mode = 'client_slave'
 
+        self.send_signal=True
 
 
 
@@ -776,15 +777,12 @@ class Params_Class(Params_Class_Default):
 
         elif self.measurement_type == 'turtlebot_demo':
 
-            self.animate_plot_mode = [[h00], [rxfd00, rxfd10], aoa_gauge]
+            self.animate_plot_mode = [[h00, h10], [rxfd00, rxfd10], aoa_gauge]
 
             self.rx_chain = ['sync_time', 'channel_est']
 
             self.tx_sig_sim = 'same'
-            # self.sig_gen_mode = 'ZadoffChu'
-            self.sig_gen_mode = 'fft'
-            self.sig_modulation = '4qam'
+            self.sig_gen_mode = 'ZadoffChu'
 
             self.turtlebot_publish_list = ["aoa", "snr"]
-
 
