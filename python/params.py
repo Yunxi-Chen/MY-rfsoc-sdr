@@ -455,18 +455,18 @@ class Params_Class(Params_Class_Default):
 
 
         # self.measurement_type = 'plot_saved_signal'
-        # self.measurement_type = 'RFSoC_demo_simple'
+        self.measurement_type = 'RFSoC_demo_simple'
         # self.measurement_type = 'mmw_demo_simple'
         # self.measurement_type = 'FR3_demo_simple'
-        self.measurement_type = 'FR3_demo_multi_freq'
+        # self.measurement_type = 'FR3_demo_multi_freq'
         # self.measurement_type = 'FR3_nyu_3state'
         # self.measurement_type = 'FR3_nyu_13state'
         # self.measurement_type = 'FR3_ant_calib'
         # self.measurement_type = 'FR3_beamforming'
         # self.measurement_type = 'FR3_cfo'
 
-        # self.mode = 'client'
-        self.mode = 'client_master'
+        self.mode = 'client'
+        # self.mode = 'client_master'
         # self.mode = 'client_slave'
 
 
@@ -478,10 +478,10 @@ class Params_Class(Params_Class_Default):
 
         if self.mode == 'client':
             self.send_signal=True
-            self.rfsoc_server_ip='192.168.2.99'
+            self.rfsoc_server_ip='192.168.185.4'
         elif self.mode == 'client_master':
             self.send_signal=False
-            self.rfsoc_server_ip='192.168.2.99'
+            # self.rfsoc_server_ip='192.168.2.99'
         elif self.mode == 'client_slave':
             self.send_signal=True
             # self.rfsoc_server_ip='192.168.2.99'
@@ -509,6 +509,7 @@ class Params_Class(Params_Class_Default):
         rxtd_ph_diff = [rxtd00_ph, '-', rxtd10_ph]
 
         IQ00 = ["rxtd|0|0|fft|fftshift|IQ"]
+        aoa_gauge = ["aoa_gauge|0|0"]
         
 
 
@@ -546,11 +547,12 @@ class Params_Class(Params_Class_Default):
             # self.wb_sc_range = [0,300]
 
             # self.animate_plot_mode = [[h00], [rxtd00_r, rxtd00_i], [rxfd00, rxfd10]]
+            self.animate_plot_mode = [[h00], [rxfd00, rxfd10], aoa_gauge]
             # self.animate_plot_mode = [[rxtd00_r, rxtd10_r], [rxtd10_r, rxtd10_i], [rxfd00, rxfd10]]
-            self.animate_plot_mode=[[rxtd00_r, rxtd00_i], rxtd_ph_diff, rxfd_ph_diff]
+            # self.animate_plot_mode=[[rxtd00_r, rxtd00_i], rxtd_ph_diff, rxfd_ph_diff]
 
-            # self.rx_chain = ['sync_time', 'channel_est']
-            self.rx_chain = []
+            self.rx_chain = ['sync_time', 'channel_est']
+            # self.rx_chain = []
 
             self.tx_sig_sim = 'same'
             # self.sig_gen_mode = 'ZadoffChu'

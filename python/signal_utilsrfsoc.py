@@ -6,7 +6,7 @@ try:
     from near_field import Sim as Near_Field_Model, RoomModel
 except:
     pass
-
+from tb4_aoa_viz.aoa_bridge import get_publish_fn
 
 
 
@@ -1092,6 +1092,78 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
 
 
+
+def wrap_angle_rad(a): return (a + np.pi) % (2*np.pi) - np.pi
+def wrap_angle_deg(a): return (a + 180.0) % 360.0 - 180.0
+
+class Aoa1sKF:
+    """
+    Wrapped-angle Kalman filter with a *persistent prior* across windows.
+    State is [angle; angular_rate]. All internal math uses radians; inputs/outputs
+    to the public API are in degrees where noted.
+
+    Parameters
+    ----------
+    dt : float
+        Sampling period (in seconds) of the AoA measurements inside *one* fusion
+        window (e.g., 0.1 for 100 ms). This also sets the discrete-time model step.
+    sigma_meas_deg : float
+        Standard deviation of the AoA measurement noise in **degrees**.
+        Smaller -> the filter trusts measurements more; larger -> trusts the model more.
+    sigma_acc_deg : float, optional (default=0.3)
+        Standard deviation (in **deg/s^2**) of the *angular acceleration* driving
+        the process noise. Larger -> more responsive to rapid changes (less smooth);
+        smaller -> smoother output (more model-trusting).
+    init_angle_deg : float or None, optional
+        If provided, the filter is initialized with this AoA (in **degrees**).
+        If None, the first observed sample in `step()` will be used to initialize.
+
+    Notes
+    -----
+    - Angles are wrapped to (-pi, pi] internally to avoid discontinuities.
+    - The constant-velocity (angle-rate) model is used:
+        x_k = [ angle_k, angular_rate_k ]^T
+        x_{k+1} = F x_k + w_k,  z_k = H x_k + v_k
+      with F = [[1, dt], [0, 1]], H = [[1, 0]].
+    """
+
+    def __init__(self, dt, sigma_meas_deg, sigma_acc_deg=0.3, init_angle_deg=None):
+        self.dt = float(dt)
+        self.sigma_meas = float(np.deg2rad(sigma_meas_deg))
+        self.sigma_acc = float(np.deg2rad(sigma_acc_deg))
+        self.F = np.array([[1.0, self.dt],[0.0, 1.0]])
+        self.H = np.array([[1.0, 0.0]])
+        self.Q = self.sigma_acc**2 * np.array([[self.dt**3/3.0, self.dt**2/2.0],
+                                               [self.dt**2/2.0, self.dt]])
+        self.R = self.sigma_meas**2
+        self.P = np.diag([np.deg2rad(30.0)**2, np.deg2rad(2.0)**2])
+        self.initialized = False
+        self.x = None
+        if init_angle_deg is not None:
+            self.reset(init_angle_deg)
+    def reset(self, init_angle_deg):
+        self.x = np.array([np.deg2rad(init_angle_deg), 0.0])
+        self.x[0] = wrap_angle_rad(self.x[0])
+        self.P = np.diag([np.deg2rad(30.0)**2, np.deg2rad(2.0)**2])
+        self.initialized = True
+    def step(self, angles_deg_1s):
+        z_list = np.deg2rad(np.asarray(angles_deg_1s, dtype=float))
+        if not self.initialized:
+            self.reset(np.rad2deg(z_list[0]))
+        for z in z_list:
+            self.x = self.F @ self.x
+            self.P = self.F @ self.P @ self.F.T + self.Q
+            innov = wrap_angle_rad(z - (self.H @ self.x)[0])
+            S = (self.H @ self.P @ self.H.T)[0, 0] + self.R
+            K = (self.P @ self.H.T)[:, 0] / S
+            self.x = self.x + K * innov
+            self.P = (np.eye(2) - K[:, None] @ self.H) @ self.P
+            self.x[0] = wrap_angle_rad(self.x[0])
+        return float(np.rad2deg(self.x[0]))
+    
+
+
+
 class Animate_Plot(Signal_Utils_Rfsoc):
     def __init__(self, params, txtd_base):
         super().__init__(params)
@@ -1110,6 +1182,9 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         self.plt_n_samples_rx = self.n_samples_trx
         self.n_samp_ch_sp = self.n_samples_ch // 2
+
+        self.kf = Aoa1sKF(dt=0.1, sigma_meas_deg=np.sqrt(5.0), sigma_acc_deg=0.3)
+        self.publish_aoa = get_publish_fn("/aoa_angle")
 
 
     
@@ -1240,7 +1315,11 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     xlabel_mode = 'id'
                     ylabel_mode = 'phase'
                 elif signal_name == 'aoa_gauge':
-                    sig = self.aoa_list[-1]
+                    # sig = self.aoa_list[-1]
+                    print(len(self.aoa_list))
+                    window_deg = np.rad2deg(self.aoa_list[-10:])
+                    sig = wrap_angle_deg(self.kf.step(window_deg))
+                    sig = np.deg2rad(sig)
                     title += "AOA Gauge"
                     xlabel_mode = 'aoa_gauge'
                     ylabel_mode = 'aoa_gauge'
@@ -1428,6 +1507,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     self.line[line_id][j].set_data(np.arange(len(signal_data)), signal_data)
                     line_id+=1
                 elif signal_name == 'aoa_gauge':
+                    self.publish_aoa(signal_data)
                     self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data))
                     self.ax[i][j].set_xlim(0, 1)
                     self.ax[i][j].set_ylim(0.5, 1)
