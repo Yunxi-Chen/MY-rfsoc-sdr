@@ -18,8 +18,8 @@ sudo ip addr add 192.168.185.4/24 dev eth0
 sudo route add default gw 192.168.185.1 dev eth0
 # sudo route add default gw 192.168.2.1 dev eth0
 # sudo route add default gw 192.168.3.100 dev usb0
-sudo resolvectl dns eth0 128.122.0.11
-# sudo resolvectl dns usb0 128.122.0.11
+sudo resolvectl dns eth0 8.8.8.8
+# sudo resolvectl dns usb0 8.8.8.8
 
 # # Wait until network is ready
 # echo "Waiting for network..." >> "$LOGFILE"
@@ -30,7 +30,7 @@ sudo resolvectl dns eth0 128.122.0.11
 
 # Start the Python program
 echo "Starting Python app..." >> "$LOGFILE"
-python3 /home/xilinx/my_project/rfsoc_test.py >> "$LOGFILE" 2>&1 &
+python /home/xilinx/jupyter_notebooks/sounder_sdr/rfsoc_test.py >> "$LOGFILE" 2>&1 &
 
 
 echo "Startup script finished at $(date)" >> "$LOGFILE"
