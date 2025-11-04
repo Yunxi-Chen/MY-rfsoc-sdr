@@ -1526,6 +1526,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     line_id+=1
                 elif signal_name == 'aoa_gauge':
                     self.publish_aoa_turtlebot(signal_data)
+                    self.publish_snr_turtlebot(10.0)
                     self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data))
                     self.ax[i][j].set_xlim(0, 1)
                     self.ax[i][j].set_ylim(0.5, 1)
