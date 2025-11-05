@@ -1167,11 +1167,12 @@ class Aoa1sKF:
 
 
 class Animate_Plot(Signal_Utils_Rfsoc):
-    def __init__(self, params, txtd_base):
+    def __init__(self, params, signals_obj, txtd_base):
         super().__init__(params)
 
         self.animate_plot_mode = getattr(params, 'animate_plot_mode', [])
         self.plot_fonts_dict = getattr(params, 'plot_fonts_dict', None)
+        self.signals_obj = signals_obj
         self.txtd_base = txtd_base
 
         self.mag_filter_list = {"process_list": ['fft'], "signal_name": ['h', 'H']}
@@ -1329,7 +1330,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     # window_deg = np.rad2deg(self.aoa_list[-10:])
                     # sig = wrap_angle_deg(self.kf.step(window_deg))
                     # sig = np.deg2rad(sig)
-                    sig = self.aoa_list[-1]
+                    sig = self.signals_obj.aoa_list[-1]
                     title += "AOA Gauge"
                     xlabel_mode = 'aoa_gauge'
                     ylabel_mode = 'aoa_gauge'
@@ -1342,7 +1343,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     raise ValueError('Unsupported signal name: {}'.format(signal_name))
                 
                 
-                sig, title_post = self.process_sig(sig, process_list=signal_process_list)
+                sig, title_post = self.signals_obj.process_sig(sig, process_list=signal_process_list)
                 title += title_post
                 label = "RX {}/TX {}".format(rx_id, tx_id)
                 if 'real' in signal_process_list:
@@ -1433,7 +1434,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         if sigs_save is None:
             if channels_save is None:
-                rxtd = self.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
+                rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
             else:
                 rxtd = None
         else:
@@ -1442,7 +1443,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         if channels_save is None:
             while True:
-                (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.rx_operations(txtd_base, rxtd)
+                (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.signals_obj.rx_operations(txtd_base, rxtd)
 
                 if self.enable_matlab_stream:
                     j = self.fc_id
@@ -1461,7 +1462,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                         break
                     else:
                         self.print("Re-estimating channel due to zero paths", thr=0)
-                        rxtd = self.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
+                        rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
                 else:
                     break
         else:
@@ -1496,14 +1497,14 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         
         signals, h_est_full, sparse_est_params = self.receive_data_anim(self.txtd_base)
 
-        self.hop_freq(self.client_piradio, self.client_controller)
+        self.signals_obj.hop_freq(self.client_piradio, self.client_controller)
 
         # if self.use_turntable:
         #     angle = self.rotation_angles[self.rot_angle_id]
         #     client_turntable.move_to_position(angle)
         #     self.rot_angle_id = (self.rot_angle_id + 1) % len(self.rotation_angles)
 
-        self.handle_nf(h_est_full, sparse_est_params)
+        self.signals_obj.handle_nf(h_est_full, sparse_est_params)
 
 
         line_id = 0
@@ -1529,7 +1530,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     line_id+=1
                 elif signal_name == 'aoa_gauge':
                     self.publish_aoa_turtlebot(signal_data)
-                    snr = self.calculate_snr(sig_td=self.last_rxtd[0,:,:self.n_samples_trx], sig_sc_range=self.sc_range)
+                    snr = self.calculate_snr(sig_td=self.signals_obj.last_rxtd[0,:,:self.n_samples_trx], sig_sc_range=self.sc_range)
                     snr_dB = self.lin_to_db(snr, mode='pow')
                     self.publish_snr_turtlebot(snr_dB)
                     self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data))

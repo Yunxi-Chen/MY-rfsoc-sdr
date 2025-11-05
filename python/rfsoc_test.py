@@ -154,7 +154,7 @@ def rfsoc_run(params):
 
     if 'client' in params.mode and not 'slave' in params.mode:
         # signals_inst.animate_plot(txtd_base, plot_mode=params.animate_plot_mode, plot_level=0)
-        animate_plot_inst = Animate_Plot(params, txtd_base)
+        animate_plot_inst = Animate_Plot(params, signals_inst, txtd_base)
         
         animate_plot_inst.client_rfsoc = client_rfsoc
         animate_plot_inst.client_lintrack = client_lintrack
