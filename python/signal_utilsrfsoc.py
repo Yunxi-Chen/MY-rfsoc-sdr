@@ -1,5 +1,7 @@
 from backend import *
 from backend import be_np as np, be_scp as scipy
+import matplotlib as mpl
+from cycler import cycler
 from sigcom_toolkit.signal_utils import Signal_Utils
 from sigcom_toolkit.general import General
 try:
@@ -1174,9 +1176,21 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.plot_fonts_dict = getattr(params, 'plot_fonts_dict', None)
         self.signals_obj = signals_obj
         self.txtd_base = txtd_base
+        # configure plot colors and a deterministic color map for subplots
+        self.plot_colors = ['#57068C', 'orange', 'green', 'red', 'blue', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        n_rows = max(1, len(self.animate_plot_mode))
+        n_cols = max(1, len(self.freq_hop_list))
+        self.plot_color_map = [[self.plot_colors[(r * n_cols + c) % len(self.plot_colors)] for c in range(n_cols)] for r in range(n_rows)]
 
+        # set matplotlib axes color cycle so subsequent ax.plot calls use our colors by default
+        try:
+            mpl.rcParams['axes.prop_cycle'] = cycler('color', self.plot_colors)
+        except Exception:
+            # fail silently if matplotlib/cycler are not available at init time
+            pass
         self.mag_filter_list = {"process_list": ['fft'], "signal_name": ['h', 'H']}
         self.untoched_plot_list = {"process_list": ['IQ'], "signal_name": ['aoa_gauge', 'nf_loc']}
+        self.plot_colors = ['purple', 'orange', 'green', 'red', 'blue', 'brown', 'pink', 'gray', 'olive', 'cyan']
 
         self.anim_paused = False
         self.read_id = -1
