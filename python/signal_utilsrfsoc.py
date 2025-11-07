@@ -1123,7 +1123,6 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.n_samp_ch_sp = self.n_samples_ch // 2
 
         # TODO: Move it to the signal utils
-        self.kf = AoAKalmanFilter(dt=0.1, sigma_meas_deg=np.sqrt(5.0), sigma_acc_deg=0.3)
 
         if len(self.turtlebot_publish_list)>0:
             from tb4_aoa_viz.aoa_bridge import get_publish_aoa_fn
@@ -1265,12 +1264,8 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     xlabel_mode = 'id'
                     ylabel_mode = 'phase'
                 elif signal_name == 'aoa_gauge':
-                    # Use Kalman filter to smooth the AOA gauge signal
-                    window_deg = np.rad2deg(self.signals_obj.aoa_list[-10:])
-                    sig = self.wrap_angle(self.kf.step(window_deg), mode='deg')
-                    sig = np.deg2rad(sig)
                     # Return the last AOA gauge value in radians
-                    # sig = self.signals_obj.aoa_list[-1]
+                    sig = self.signals_obj.aoa_list[-1]
                     title += "AOA Gauge"
                     xlabel_mode = 'aoa_gauge'
                     ylabel_mode = 'aoa_gauge'
@@ -1281,8 +1276,8 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     ylabel_mode = 'nf_loc'
                 else:
                     raise ValueError('Unsupported signal name: {}'.format(signal_name))
-                
-                
+
+
                 sig, title_post = self.signals_obj.process_sig(sig, process_list=signal_process_list)
                 title += title_post
                 label = "RX {}/TX {}".format(rx_id, tx_id)

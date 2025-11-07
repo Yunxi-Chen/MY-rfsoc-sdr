@@ -488,7 +488,7 @@ class Params_Class(Params_Class_Default):
 
         if self.mode == 'client':
             self.send_signal=True
-            self.rfsoc_server_ip='192.168.185.4'
+            # self.rfsoc_server_ip='192.168.185.4'
         elif self.mode == 'client_master':
             self.send_signal=False
             # self.rfsoc_server_ip='192.168.2.99'
