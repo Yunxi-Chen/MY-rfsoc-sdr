@@ -2,7 +2,7 @@ from backend import *
 from backend import be_np as np, be_scp as scipy
 import matplotlib as mpl
 from cycler import cycler
-from sigcom_toolkit.signal_utils import Signal_Utils
+from sigcom_toolkit.signal_utils import Signal_Utils, AoAKalmanFilter
 from sigcom_toolkit.general import General
 try:
     from near_field import Sim as Near_Field_Model, RoomModel
@@ -1092,80 +1092,6 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             
         return sig, title
 
-    
-
-
-
-
-def wrap_angle_rad(a): return (a + np.pi) % (2*np.pi) - np.pi
-def wrap_angle_deg(a): return (a + 180.0) % 360.0 - 180.0
-
-class Aoa1sKF:
-    """
-    Wrapped-angle Kalman filter with a *persistent prior* across windows.
-    State is [angle; angular_rate]. All internal math uses radians; inputs/outputs
-    to the public API are in degrees where noted.
-
-    Parameters
-    ----------
-    dt : float
-        Sampling period (in seconds) of the AoA measurements inside *one* fusion
-        window (e.g., 0.1 for 100 ms). This also sets the discrete-time model step.
-    sigma_meas_deg : float
-        Standard deviation of the AoA measurement noise in **degrees**.
-        Smaller -> the filter trusts measurements more; larger -> trusts the model more.
-    sigma_acc_deg : float, optional (default=0.3)
-        Standard deviation (in **deg/s^2**) of the *angular acceleration* driving
-        the process noise. Larger -> more responsive to rapid changes (less smooth);
-        smaller -> smoother output (more model-trusting).
-    init_angle_deg : float or None, optional
-        If provided, the filter is initialized with this AoA (in **degrees**).
-        If None, the first observed sample in `step()` will be used to initialize.
-
-    Notes
-    -----
-    - Angles are wrapped to (-pi, pi] internally to avoid discontinuities.
-    - The constant-velocity (angle-rate) model is used:
-        x_k = [ angle_k, angular_rate_k ]^T
-        x_{k+1} = F x_k + w_k,  z_k = H x_k + v_k
-      with F = [[1, dt], [0, 1]], H = [[1, 0]].
-    """
-
-    def __init__(self, dt, sigma_meas_deg, sigma_acc_deg=0.3, init_angle_deg=None):
-        self.dt = float(dt)
-        self.sigma_meas = float(np.deg2rad(sigma_meas_deg))
-        self.sigma_acc = float(np.deg2rad(sigma_acc_deg))
-        self.F = np.array([[1.0, self.dt],[0.0, 1.0]])
-        self.H = np.array([[1.0, 0.0]])
-        self.Q = self.sigma_acc**2 * np.array([[self.dt**3/3.0, self.dt**2/2.0],
-                                               [self.dt**2/2.0, self.dt]])
-        self.R = self.sigma_meas**2
-        self.P = np.diag([np.deg2rad(30.0)**2, np.deg2rad(2.0)**2])
-        self.initialized = False
-        self.x = None
-        if init_angle_deg is not None:
-            self.reset(init_angle_deg)
-    def reset(self, init_angle_deg):
-        self.x = np.array([np.deg2rad(init_angle_deg), 0.0])
-        self.x[0] = wrap_angle_rad(self.x[0])
-        self.P = np.diag([np.deg2rad(30.0)**2, np.deg2rad(2.0)**2])
-        self.initialized = True
-    def step(self, angles_deg_1s):
-        z_list = np.deg2rad(np.asarray(angles_deg_1s, dtype=float))
-        if not self.initialized:
-            self.reset(np.rad2deg(z_list[0]))
-        for z in z_list:
-            self.x = self.F @ self.x
-            self.P = self.F @ self.P @ self.F.T + self.Q
-            innov = wrap_angle_rad(z - (self.H @ self.x)[0])
-            S = (self.H @ self.P @ self.H.T)[0, 0] + self.R
-            K = (self.P @ self.H.T)[:, 0] / S
-            self.x = self.x + K * innov
-            self.P = (np.eye(2) - K[:, None] @ self.H) @ self.P
-            self.x[0] = wrap_angle_rad(self.x[0])
-        return float(np.rad2deg(self.x[0]))
-    
-
 
 
 class Animate_Plot(Signal_Utils_Rfsoc):
@@ -1176,12 +1102,8 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.plot_fonts_dict = getattr(params, 'plot_fonts_dict', None)
         self.signals_obj = signals_obj
         self.txtd_base = txtd_base
-        # configure plot colors and a deterministic color map for subplots
-        self.plot_colors = ['#57068C', 'orange', 'green', 'red', 'blue', 'brown', 'pink', 'gray', 'olive', 'cyan']
-        n_rows = max(1, len(self.animate_plot_mode))
-        n_cols = max(1, len(self.freq_hop_list))
-        self.plot_color_map = [[self.plot_colors[(r * n_cols + c) % len(self.plot_colors)] for c in range(n_cols)] for r in range(n_rows)]
 
+        self.plot_colors = ['#57068C', 'orange', 'green', 'red', 'blue', 'brown', 'pink', 'gray', 'olive', 'cyan']
         # set matplotlib axes color cycle so subsequent ax.plot calls use our colors by default
         try:
             mpl.rcParams['axes.prop_cycle'] = cycler('color', self.plot_colors)
@@ -1200,7 +1122,9 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.plt_n_samples_rx = self.n_samples_trx
         self.n_samp_ch_sp = self.n_samples_ch // 2
 
-        self.kf = Aoa1sKF(dt=0.1, sigma_meas_deg=np.sqrt(5.0), sigma_acc_deg=0.3)
+        # TODO: Move it to the signal utils
+        self.kf = AoAKalmanFilter(dt=0.1, sigma_meas_deg=np.sqrt(5.0), sigma_acc_deg=0.3)
+
         if len(self.turtlebot_publish_list)>0:
             from tb4_aoa_viz.aoa_bridge import get_publish_aoa_fn
             from tb4_aoa_viz.snr_bridge import get_publish_snr_fn
@@ -1336,14 +1260,14 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     xlabel_mode = 'time_h_sparse'
                     ylabel_mode = 'snr'
                 elif signal_name == 'rx_ph_diff':
-                    sig = self.rx_phase_list
+                    sig = self.signals_obj.rx_phase_list
                     title += "RX-Phase Diff-TD"
                     xlabel_mode = 'id'
                     ylabel_mode = 'phase'
                 elif signal_name == 'aoa_gauge':
                     # Use Kalman filter to smooth the AOA gauge signal
                     window_deg = np.rad2deg(self.signals_obj.aoa_list[-10:])
-                    sig = wrap_angle_deg(self.kf.step(window_deg))
+                    sig = self.wrap_angle(self.kf.step(window_deg), mode='deg')
                     sig = np.deg2rad(sig)
                     # Return the last AOA gauge value in radians
                     # sig = self.signals_obj.aoa_list[-1]
@@ -1454,7 +1378,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
             else:
                 rxtd = None
         else:
-            rxtd = sigs_save['rxtd_{:.1f}'.format(self.fc/1e9)][self.read_id*self.n_rd_rep:(self.read_id+1)*self.n_rd_rep]
+            rxtd = sigs_save['rxtd_{:.1f}'.format(self.signals_obj.fc/1e9)][self.read_id*self.n_rd_rep:(self.read_id+1)*self.n_rd_rep]
             txtd_base = sigs_save['txtd'][0]
 
         if channels_save is None:
@@ -1462,7 +1386,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                 (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.signals_obj.rx_operations(txtd_base, rxtd)
 
                 if self.enable_matlab_stream:
-                    j = self.fc_id
+                    j = self.signals_obj.fc_id
                     print(self.freq_hop_list[j])
                     print("Streaming RX TD data to MATLAB...")
                     # (txtd_base,txtd) = self.gen_tx_signal()
@@ -1482,7 +1406,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                 else:
                     break
         else:
-            h_est_full = channels_save['h_est_full_{:.1f}'.format(self.fc/1e9)]
+            h_est_full = channels_save['h_est_full_{:.1f}'.format(self.signals_obj.fc/1e9)]
 
             h = h_est_full.copy()[self.read_id*self.n_rd_rep:(self.read_id+1)*self.n_rd_rep]
             h = h.transpose(3,1,2,0)
@@ -1525,7 +1449,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         line_id = 0
         for i in range(self.n_plots_row):
-            j = self.fc_id - 1
+            j = self.signals_obj.fc_id - 1
 
             for signal in signals[i]['plot_signals']:
 
@@ -1591,7 +1515,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     line_id+=1
                     self.ax[i][j].set_ylim([ymin, ymax])
                 elif signal_name == 'nf_loc':
-                    self.nf_model.plot_results(self.ax[i][j], RoomModel=self.RoomModel, plot_type='init_est')
+                    self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est')
                 else:
                     self.line[line_id][j].set_ydata(signal_data)
                     line_id+=1
@@ -1671,12 +1595,12 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                         self.ax[i][j].axis('off')
                         
                     elif signal_name=='nf_loc':
-                        self.ax[i][j] = self.nf_model.plot_results(self.ax[i][j], RoomModel=self.RoomModel, plot_type='init_est')
+                        self.ax[i][j] = self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est')
                         self.ax[i][j].set_yticks([])
 
                         self.ax[i][j].set_xlim(self.nf_region[0])
                         self.ax[i][j].set_ylim(self.nf_region[1])
-                        self.ax[i][j].set_xticks(np.arange(self.nself.n_plots_rowf_region[0,0], self.nf_region[0,1], 1.0))
+                        self.ax[i][j].set_xticks(np.arange(self.nf_region[0,0], self.nf_region[0,1], 1.0))
                         self.ax[i][j].set_yticks(np.arange(self.nf_region[1,0], self.nf_region[1,1], 2.0))
 
                     else:
@@ -1693,12 +1617,6 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                 self.ax[i][j].set_xlabel(x_label)
                 self.ax[i][j].set_ylabel(y_label)
 
-
-                # self.ax[i][j].title.set_fontsize(35-5*self.n_plots_row-3*self.n_plots_col)
-                # self.ax[i][j].xaxis.label.set_fontsize(30-4*self.n_plots_row-2*self.n_plots_col)
-                # self.ax[i][j].yaxis.label.set_fontsize(30-4*self.n_plots_row-2*self.n_plots_col)
-                # self.ax[i][j].tick_params(axis='both', which='major', labelsize=25-4*self.n_plots_row-2*self.n_plots_col)  # For major ticks
-                # self.ax[i][j].legend(fontsize=30-4*self.n_plots_row-2.5*self.n_plots_col)
                 self.ax[i][j].title.set_fontsize(self.plot_fonts_dict['title_size'])
                 self.ax[i][j].xaxis.label.set_fontsize(self.plot_fonts_dict['xaxis_size'])
                 self.ax[i][j].yaxis.label.set_fontsize(self.plot_fonts_dict['yaxis_size'])
