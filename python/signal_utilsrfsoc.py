@@ -79,7 +79,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         if self.tx_sig_sim == 'shifted':
             # txtd_base[1,:] = txtd_base[0,:].copy()
             # txtd_base[1,:] = np.roll(txtd_base[0,:], shift=(self.n_samples_tx//2), axis=-1)
-            txtd_base[1,:] = np.roll(txtd_base[0,:], shift=(384), axis=-1)
+            txtd_base[1,:] = np.roll(txtd_base[0,:], shift=(384), axis=-1) #把第 0 根天线的信号拿出来,向右平移 384 个点 (shift=384), 赋值给第 1 根天线
 
             # dot_prod = []
             # for i in range(0, self.n_samples_tx, 1):
@@ -91,7 +91,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
 
         if self.mixer_mode=='digital' and self.mix_freq!=0:
-            for ant_id in range(self.n_tx_ant):
+            for ant_id in range(self.n_tx_ant): #对每根天线的基带信号进行数字上变频
                 txtd_s = self.freq_shift(txtd_base[ant_id], shift=self.mix_freq, fs=self.fs_tx)
                 txtd.append(txtd_s)
             
@@ -107,10 +107,11 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         txtd = np.array(txtd)
         
         if self.beamforming:
+            # Apply beamforming to the baseband signals
             txtd_base = self.beam_form(txtd_base)
             txtd = self.beam_form(txtd)
 
-        print("Dot product of transmitted signals: ", np.abs(np.vdot(txtd_base[1], txtd_base[0])))
+        print("Dot product of transmitted signals: ", np.abs(np.vdot(txtd_base[1], txtd_base[0]))) #Calculate the dot product to verify orthogonality
         # print("Correlation of transmitted signals: ", np.max(np.abs(np.correlate(txtd_base[0], txtd_base[1], mode='full'))))
         # self.plot_signal(sigs = np.abs(np.correlate(txtd_base[1,:], txtd_base[0,:], mode='full')))
 
@@ -184,26 +185,26 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             else:
 
                 if self.nf_sep_idx==0:
-                    if self.use_linear_track:
+                    if self.use_linear_track: #return to home position(the initial position which is the closest)
                         distance = 1000*(self.nf_rx_ant_sep[0]*self.wl - self.nf_rx_ant_sep[-1]*self.wl)
                         distance = np.round(distance, 2)
                         self.client_lintrack.move(lin_track_id=1, distance=distance)
                         time.sleep(0.5)
                         self.ant_dx = self.nf_rx_ant_sep[0]
 
-                        if self.nf_loc_idx < len(self.nf_rx_loc):
+                        if self.nf_loc_idx < len(self.nf_rx_loc):# 2 antennas move together 
                             distance = 1000*(self.nf_rx_loc[self.nf_loc_idx,0] - self.nf_rx_loc[self.nf_loc_idx-1,0])
                             distance = np.round(distance, 2)
                             self.client_lintrack.move(lin_track_id=1, distance=distance)
                             self.client_lintrack.move(lin_track_id=0, distance=distance)
                             time.sleep(0.5)
                             
-                    self.nf_sep_idx+=1
-                    self.nf_loc_idx+=1
-                elif self.nf_sep_idx==len(self.nf_rx_ant_sep)+1:
+                    self.nf_sep_idx+=1 # Increment the near-field separation index
+                    self.nf_loc_idx+=1 # Increment the near-field location index
+                elif self.nf_sep_idx==len(self.nf_rx_ant_sep)+1: # Finished all separations for the current location
                     self.nf_sep_idx = 0
                 else:
-                    self.h_nf.append(h_est_full)
+                    self.h_nf.append(h_est_full) #save the estimated channel frequency response
                     (h_tr, dly_est, peaks, npath_est) = sparse_est_params
                     self.dly_est_nf.append(dly_est)
                     self.peaks_nf.append(peaks)
@@ -213,11 +214,11 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                         if self.nf_sep_idx < len(self.nf_rx_ant_sep):
                             distance = 1000*(self.nf_rx_ant_sep[self.nf_sep_idx]*self.wl - self.nf_rx_ant_sep[self.nf_sep_idx-1]*self.wl)
                             distance = np.round(distance, 2)
-                            self.client_lintrack.move(lin_track_id=1, distance=distance)
+                            self.client_lintrack.move(lin_track_id=1, distance=distance) # only move the RX antenna on linear track 1
                             time.sleep(0.5)
                             self.ant_dx = self.nf_rx_ant_sep[self.nf_sep_idx]
                     
-                    self.nf_sep_idx+=1
+                    self.nf_sep_idx+=1 # count
             
                 self.ant_dx_m = self.ant_dx * self.wl
 
@@ -261,16 +262,16 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         n_epochs = 1000
         lr_init = 0.1
         H_gt = fft(h.copy(), axis=0)
-        tx_ant_vec = self.nf_tx_ant_loc[:,:,:] - (self.nf_tx_ant_loc[0,0,:])[None,None,:] + 0.01
-        rx_ant_vec = self.nf_rx_ant_loc[:,:,:] - (self.nf_rx_ant_loc[0,0,:])[None,None,:]
-        phase_diff = np.angle(peaks[:n_paths_min,0,0,:] * np.conj(peaks[:n_paths_min,1,0,:]))
+        tx_ant_vec = self.nf_tx_ant_loc[:,:,:] - (self.nf_tx_ant_loc[0,0,:])[None,None,:] + 0.01 # calculate the relative position vector of the TX antennas
+        rx_ant_vec = self.nf_rx_ant_loc[:,:,:] - (self.nf_rx_ant_loc[0,0,:])[None,None,:] # calculate the relative position vector of the RX antennas
+        phase_diff = np.angle(peaks[:n_paths_min,0,0,:] * np.conj(peaks[:n_paths_min,1,0,:])) # calculate the phase difference between RX antennas 相位差 = Angle(天线0信号 * 天线1信号的共轭)
         # phase_diff = np.mean(phase_diff, axis=-1)
-        aoa = np.zeros(phase_diff.shape)
+        aoa = np.zeros(phase_diff.shape) # initialize AoA array
         for m in range(phase_diff.shape[-1]):
-            ant_dx_m = np.linalg.norm(self.nf_rx_ant_loc[1,m,:] - self.nf_rx_ant_loc[0,m,:], axis=-1)
-            aoa[:,m] = self.phase_to_aoa(phase_diff[:,m], wl=self.wl, ant_dim=self.ant_dim, ant_dx_m=ant_dx_m, ant_dy_m=self.ant_dy_m)
+            ant_dx_m = np.linalg.norm(self.nf_rx_ant_loc[1,m,:] - self.nf_rx_ant_loc[0,m,:], axis=-1) # 指向从天线 0 到天线 1 的方向的向量的模长
+            aoa[:,m] = self.phase_to_aoa(phase_diff[:,m], wl=self.wl, ant_dim=self.ant_dim, ant_dx_m=ant_dx_m, ant_dy_m=self.ant_dy_m) # convert phase difference to AoA
             # aoa = self.phase_to_aoa(phase_diff, wl=self.wl, ant_dim=self.ant_dim, ant_dx_m=self.ant_dx_m, ant_dy_m=self.ant_dy_m)
-        trx_unit_vec = np.stack((np.sin(aoa), np.cos(aoa)), axis=-1)
+        trx_unit_vec = np.stack((np.sin(aoa), np.cos(aoa)), axis=-1) # unit vector pointing from TX to RX 把角度变成方向向量 (Unit Vector)
         # print("phase_diff: ", phase_diff[:,0])
         # print("aoa: ", aoa[:,0])
         # print("trx_unit_vec: ", trx_unit_vec[:,0,:])
@@ -304,11 +305,12 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         else:
             phase_diff_list = []
             delay_list = []
+            # iteratively receive signals and calculate phase difference
             for i in range(self.calib_iter):
                 rxtd = self.receive_data(client_rfsoc, mode='once')
                 rxtd = rxtd[0]
                 phase_diff = self.calc_phase_offset(rxtd[0,:], rxtd[1,:])
-                delay = phase_diff / (2*np.pi*self.fc)
+                delay = phase_diff / (2*np.pi*self.fc) # convert phase difference to time delay 时间 = 相位 / (2 * pi * 频率)
                 phase_diff_list.append(phase_diff)
                 delay_list.append(delay)
 
@@ -349,15 +351,15 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
 
     def process_sys_response(self):
-        self.sys_response = np.load(self.sys_response_path)['h_est_full_avg']
-        self.sys_response /= np.max(np.abs(self.sys_response))
+        self.sys_response = np.load(self.sys_response_path)['h_est_full_avg'] #read the saved system response
+        self.sys_response /= np.max(np.abs(self.sys_response)) #normalize
 
 
     def compute_sys_response(self):
         n_rx = 1
 
         if n_rx == 1:
-            sys_response_folder = os.path.join(os.getcwd(), 'sigs_tx1_rx1_rx_rotate/')
+            sys_response_folder = os.path.join(os.getcwd(), 'sigs_tx1_rx1_rx_rotate/') #拼接路径
         elif n_rx == 2:
             sys_response_folder = os.path.join(os.getcwd(), 'sigs_tx2_rx2_rx_rotate/')
 
@@ -382,7 +384,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                         data_dict = {key: value for key, value in data.items() if not key.startswith('__')}
 
                     spec_list = file_name.split('_')
-                    angle = float(spec_list[0])
+                    angle = float(spec_list[0]) #extract angle from file name
                     sys_response[angle] = {}
 
                     txtd_base = data_dict['txtd']
@@ -390,27 +392,27 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
                     rxtd_dict = {}
                     for key, value in data_dict.items():
-                        if not 'rxtd_' in key:
+                        if not 'rxtd_' in key: # only process keys that contain 'rxtd_'
                             continue
-                        frequency = float(key.split('_')[-1])
-                        rxtd_dict[frequency] = value
+                        frequency = float(key.split('_')[-1]) # extract frequency from key name
+                        rxtd_dict[frequency] = value # store received signal in dictionary
                         
                     for frequency, rxtd in rxtd_dict.items():
-                        rxtd = np.mean(rxtd, axis=0)
-                        (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.rx_operations(txtd_base, rxtd)
-                        max_gain = np.max(np.abs(h_est_full), axis=-1)
+                        rxtd = np.mean(rxtd, axis=0) # average over saved signals
+                        (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.rx_operations(txtd_base, rxtd) # estimate the channel
+                        max_gain = np.max(np.abs(h_est_full), axis=-1) # calculate the maximum gain over frequency
                         sys_response[angle][frequency] = max_gain
 
 
-            angles = [float(angle) for angle in sys_response.keys()]
+            angles = [float(angle) for angle in sys_response.keys()] # extract angles from the dictionary keys and sort them
             angles = np.array(angles)
             angles = np.sort(angles)
-            frequencies = np.array(list(sys_response[angles[0]].keys()))
+            frequencies = np.array(list(sys_response[angles[0]].keys())) # extract frequencies from the dictionary keys and sort them
             frequencies = np.sort(frequencies)
 
-            n_rx_ = np.shape(sys_response[angles[0]][frequencies[0]])[0]
-            n_tx_ = np.shape(sys_response[angles[0]][frequencies[0]])[1]
-            sys_response_matrix = np.zeros((len(angles), len(frequencies), n_rx_, n_tx_))
+            n_rx_ = np.shape(sys_response[angles[0]][frequencies[0]])[0] #number of RX antennas
+            n_tx_ = np.shape(sys_response[angles[0]][frequencies[0]])[1] #number of TX antennas
+            sys_response_matrix = np.zeros((len(angles), len(frequencies), n_rx_, n_tx_)) # initialize 4D system response matrix
             for i, angle in enumerate(angles):
                 for j, frequency in enumerate(frequencies):
                     sys_response_matrix[i,j] = sys_response[angle][frequency]
@@ -426,19 +428,19 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         
 
         sys_response_matrix /= np.max(sys_response_matrix)
-        sys_response_matrix = self.lin_to_db(sys_response_matrix, mode='mag')
+        sys_response_matrix = self.lin_to_db(sys_response_matrix, mode='mag') # convert to dB scale
 
 
         plot_params_dict = {'title_size': 18, 'title_weight': 'bold', 'title_max_chars': 45, 'xaxis_size': 16, 'yaxis_size': 16, 'ticks_size': 14, 'legend_size': 16, 'line_width': 2.0, 'marker_size': 8, 'hspace': 0.5, 'wspace': 0.5}
 
-
+        # Plot system response vs frequency for fixed angles
         fixed_angles = [-90, -30, 0, 30, 90]
         if n_rx > 1:
             fixed_angles = [-90, 0, 30, 90]
         fig, ax = plt.subplots(1, 1, figsize=(10, 6))
         lines = []
         for fixed_angle in fixed_angles:
-            angle_id = np.where(angles==fixed_angle)[0][0]
+            angle_id = np.where(angles==fixed_angle)[0][0] # get the index of the fixed angle
             for rx_id in range(n_rx):
                 line, = ax.plot(frequencies, sys_response_matrix[angle_id,:,rx_id,0], label='Angle {}, RX {}'.format(fixed_angle, rx_id))
                 lines.append(line)
@@ -448,7 +450,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         self.set_plot_params(ax, lines, plot_params_dict)
         plt.savefig(os.path.join(self.figs_dir, 'sys_response_vs_freq_{}.pdf'.format(postfix)))
 
-
+        # Plot system response vs angle for fixed frequencies
         fixed_freqs = [6.0, 8.0, 10.0, 15.0, 20.0]
         if n_rx > 1:
             fixed_freqs = [6.0, 10.0, 15.0, 20.0]
@@ -466,7 +468,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         plt.show()
         plt.savefig(os.path.join(self.figs_dir, 'sys_response_vs_angle_{}.pdf'.format(postfix)))
 
-
+        # Plot 2D heat diagram of system response
         rx_id = 0
         tx_id = 0
         for rx_id in range(n_rx):
@@ -512,17 +514,17 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                 collected_data = {}
                 for key, value in data_dict.items():
                     # print(key, value.shape)
-                    if not any (x in key for x in ['rxtd', 'h_est_full']):
+                    if not any (x in key for x in ['rxtd', 'h_est_full']): # only collect keys that contain 'rxtd' or 'h_est_full'
                         continue
-                    elif ignore_less_count and value.shape[0] < collect_count:
+                    elif ignore_less_count and value.shape[0] < collect_count: # skip if the number of saved signals is less than collect_count
                         continue
                     else:
                         if key == 'txtd':
-                            collect_count_ = 1
+                            collect_count_ = 1 # only collect one TX signal
                         else:
-                            collect_count_ = collect_count
+                            collect_count_ = collect_count # collect up to collect_count RX signals
                         collect_count_ = min(value.shape[0], collect_count_)
-                        collected_data[key] = value[:collect_count_]
+                        collected_data[key] = value[:collect_count_] # collect the first collect_count_ signals 截取从0到collect_count_-1
 
                 for key, value in collected_data.items():
                     if 'rxtd' in key:
@@ -564,18 +566,18 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             else:
                 rotation_angles = self.rotation_angles
                 use_turntable = self.use_turntable
-                rotation_delay = client_turntable.rotation_delay if use_turntable else 0
+                rotation_delay = client_turntable.rotation_delay if use_turntable else 0 # delay to wait after rotation
                 mode = 'measurement'
 
             rotation_time = 1.514 + rotation_delay
             freq_switch_time = 0.052 + self.piradio_freq_sw_dly_default
-            total_time = len(rotation_angles) * (rotation_time + len(self.freq_hop_list)*(freq_switch_time))
+            total_time = len(rotation_angles) * (rotation_time + len(self.freq_hop_list)*(freq_switch_time)) # 公式：总时间 = 角度数量 * ( 转一下的时间 + 频率数量 * 切个频率的时间 )
             self.print("Anticipated time to save signals: {:0.0f} s".format(total_time), thr=0)
             
 
             for angle_id in range(len(rotation_angles)):
 
-                remaining_time = (len(rotation_angles) - angle_id) * (rotation_time + len(self.freq_hop_list)*(freq_switch_time))
+                remaining_time = (len(rotation_angles) - angle_id) * (rotation_time + len(self.freq_hop_list)*(freq_switch_time)) # 公式：剩余时间 = 剩余角度数量 * ( 转一下的时间 + 频率数量 * 切个频率的时间 )
                 self.print("Remaining time to save signals: {:0.0f} s".format(remaining_time), thr=0)
 
                 angle = rotation_angles[angle_id]
@@ -593,7 +595,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                     self.print("Saving signals for Freq: {} GHz".format(frequency/1e9), thr=0)
 
                     start_time = time.time()
-                    self.hop_freq(client_piradio, client_controller, fc_id=freq_id)
+                    self.hop_freq(client_piradio, client_controller, fc_id=freq_id) # hop to the desired frequency
 
                     # test = np.load(self.sig_save_path)
                     rxtd_save=[]
@@ -602,21 +604,21 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                     H_est_max_save=[]
                         
                     if 'channel' in save_list:
-                        n_rd_rep = self.n_save
+                        n_rd_rep = self.n_save # read repeat for channel saving (One-by-One)
                     else:
-                        n_rd_rep = self.n_save//self.n_frame_rd
+                        n_rd_rep = self.n_save//self.n_frame_rd # read repeat for signal saving (Batch)
                     rxtd = self.receive_data(client_rfsoc, n_rd_rep=n_rd_rep, mode='once', verbose=False)
                     # raise ValueError('Stop')
                     
                     if 'channel' in save_list:
                         for i in range(self.n_save):
                             self.print("Channel Save Iteration: {}".format(i+1), thr=0)
-                            rxtd = self.receive_data(client_rfsoc, n_rd_rep=n_rd_rep, mode='once')
+                            rxtd = self.receive_data(client_rfsoc, n_rd_rep=n_rd_rep, mode='once') # read repeat for channel saving (One-by-One)
 
                             # to handle the dimenstion needed for read repeat
-                            (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.rx_operations(txtd_base, rxtd[i])
+                            (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.rx_operations(txtd_base, rxtd[i]) # rxtd[i] 的写法暗示 receive_data 可能返回了一个列表或数组，这里取第 i 个元素
 
-                            rxtd_save.append(rxtd_base)
+                            rxtd_save.append(rxtd_base) # 把算好的结果一个个追加 (append) 到列表里
                             
                             h_est_full_save.append(h_est_full)
                             H_est_save.append(H_est)
@@ -631,9 +633,9 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                         # self.rx_chain = ['channel_est']
                         # (rxtd_avg, h_est_full_avg, H_est_avg, H_est_max_avg, sparse_est_params) = self.rx_operations(txtd_base, rxtd_avg)
                     else:
-                        rxtd_save = np.empty((self.n_save, self.n_rx_ant, self.n_samples_tx), dtype=rxtd.dtype)
+                        rxtd_save = np.empty((self.n_save, self.n_rx_ant, self.n_samples_tx), dtype=rxtd.dtype) #先划出一块空地，形状是 [总帧数, 天线数, 采样点数]
                         for i in range(self.n_frame_rd):
-                            rxtd_save[i::self.n_frame_rd] = rxtd[:,:,i*self.n_samples_tx:(i+1)*self.n_samples_tx]
+                            rxtd_save[i::self.n_frame_rd] = rxtd[:,:,i*self.n_samples_tx:(i+1)*self.n_samples_tx] # 从原始大包里，切出第 i 段数据，放到对应的位置上去
                         # print(rxtd_save.shape)
 
                         # for i in range(self.n_frame_rd):
@@ -644,7 +646,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                         #     print(rxtd_save.shape)
 
 
-                    txtd_save = np.expand_dims(txtd_base, axis=0)
+                    txtd_save = np.expand_dims(txtd_base, axis=0) # 把发射信号的基准数据扩展一个维度，方便后续保存
                     rxtd_save = np.array(rxtd_save)
 
                     self.validate_saved_signals(rxtd=rxtd_save)
@@ -663,7 +665,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                 if self.measurement_type == 'FR3_nyu_3state':
                     if mode != 'calib':
                         angles_dict = {0: 'alpha', 45: 'beta', -45: 'gamma'}
-                        postfix = postfix.replace('<rxorient>', angles_dict[angle])
+                        postfix = postfix.replace('<rxorient>', angles_dict[angle]) # replace placeholder with orientation name
                         # save_name = f'{frequency/1e9}' + postfix + '.' + self.save_format
                     save_name = postfix + '.' + self.save_format
                 elif self.measurement_type == 'FR3_nyu_13state':
@@ -682,7 +684,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                         
                 if 'signal' in save_list:
                     sig_save_path=os.path.join(self.sig_dir, save_name)
-                    if self.save_format == 'npz':
+                    if self.save_format == 'npz': # save as npz format NumPy 的原生压缩格式
                         # np.savez(sig_save_path, txtd=txtd_save, rxtd=rxtd_save)
                         np.savez(sig_save_path, **measurements)
                     elif self.save_format == 'mat':
@@ -701,12 +703,12 @@ class Signal_Utils_Rfsoc(Signal_Utils):
     
 
     def receive_data(self, client_rfsoc, n_rd_rep=1, mode='once', verbose=False):
-        rxtd=[]
+        rxtd=[] #list to store received signals
         for i in range(n_rd_rep):
             if verbose:
                 self.print("Reading iteration: {}".format(i+1), thr=0)
             rxtd_ = client_rfsoc.receive_data(mode=mode)
-            rxtd_ = rxtd_.squeeze(axis=0)
+            rxtd_ = rxtd_.squeeze(axis=0) #remove the extra dimension added by RFSoC client 去掉维度为 1 的皮
             rxtd.append(rxtd_)
         rxtd = np.array(rxtd)
         self.last_rxtd = rxtd.copy()
@@ -715,20 +717,20 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
     def hop_freq(self, client_piradio, client_controller, fc_id=None, freq=None):
             if fc_id is not None:
-                fc_id = fc_id
+                fc_id = fc_id # use the provided frequency index
             else:
-                fc_id = (self.fc_id + 1) % len(self.freq_hop_list)
+                fc_id = (self.fc_id + 1) % len(self.freq_hop_list) # hop to the next frequency index cyclically 如果到了列表最后一个，再 +1 就会自动变回 0（回到开头）。
             if freq is not None:
                 fc = freq
             else:
-                fc = self.freq_hop_list[int(fc_id)]
+                fc = self.freq_hop_list[int(fc_id)] # get the frequency from the hop list using the index
             if self.fc != fc:
                 if self.control_piradio:
-                    client_piradio.set_frequency(fc=fc)
+                    client_piradio.set_frequency(fc=fc) # set frequency in Pi-Radio
                     if 'master' in self.mode:
-                        client_controller.set_frequency_piradio(fc=fc)
+                        client_controller.set_frequency_piradio(fc=fc) # set frequency in the controller for master mode
 
-                    if self.set_piradio_opt_losupp:
+                    if self.set_piradio_opt_losupp: # set optimal LO suppression after frequency hop
                         self.set_optimal_losupp_piradio(client_piradio, client_controller, fc=fc)
 
                     # if client_piradio.freq_sw_dly == 0:
@@ -797,15 +799,15 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                     client_controller.set_gain_piradio(trx='tx', chan=1, gain_db=tx_gain_dB)
 
                 for rx_gain_dB in rx_gain_dB_list:
-                    if rx_gain_dB < min_rx_gain_dB or rx_gain_dB > max_rx_gain_dB:
+                    if rx_gain_dB < min_rx_gain_dB or rx_gain_dB > max_rx_gain_dB: # skip if RX gain is out of bounds
                         continue
-                    if tx_gain_dB + rx_gain_dB > max_total_gain_dB:
+                    if tx_gain_dB + rx_gain_dB > max_total_gain_dB: # skip if total gain exceeds max limit
                         continue
 
                     self.print("Setting RX gain to {} dB".format(rx_gain_dB), thr=1)
                     client_piradio.set_gain(trx='rx', chan=0, gain_db=rx_gain_dB)
                     client_piradio.set_gain(trx='rx', chan=1, gain_db=rx_gain_dB)
-                    if client_piradio.gain_sw_dly == 0:
+                    if client_piradio.gain_sw_dly == 0: # wait for gain switch delay if not set in Pi-Radio client
                         time.sleep(2*self.piradio_gain_sw_dly_default)
 
                     rxtd = self.receive_data(client_rfsoc, mode='once')
@@ -821,7 +823,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             self.print("Optimal RX gain for frequency {}: {} dB".format(frequency,rx_gain_dB_optimal), thr=1)
             self.print("Optimal SNR for frequency {}: {} dB".format(frequency,snr_dB_optimal), thr=1)
 
-            self.optimal_gains[self.tx_rx_distance][frequency]['tx_gain'] = int(tx_gain_dB_optimal)
+            self.optimal_gains[self.tx_rx_distance][frequency]['tx_gain'] = int(tx_gain_dB_optimal) #字典[距离][频率]['tx_gain'] = 最佳值
             self.optimal_gains[self.tx_rx_distance][frequency]['rx_gain'] = int(rx_gain_dB_optimal)
 
 
@@ -835,8 +837,8 @@ class Signal_Utils_Rfsoc(Signal_Utils):
     def set_optimal_gain_piradio(self, client_piradio, client_controller):
         self.print("Setting optimal TX/RX gains in Pi-Radio", thr=0)
 
-        freq_list = list(self.optimal_gains[self.tx_rx_distance].keys())
-        nearest_fc = min(freq_list, key=lambda x: abs(x - self.stable_fc_piradio/1e9))
+        freq_list = list(self.optimal_gains[self.tx_rx_distance].keys()) # get the list of frequencies with optimal gains
+        nearest_fc = min(freq_list, key=lambda x: abs(x - self.stable_fc_piradio/1e9)) # find the frequency closest to the stable frequency
 
         rx_gain_optimal = self.optimal_gains[self.tx_rx_distance][nearest_fc]['rx_gain']
         tx_gain_optimal = self.optimal_gains[self.tx_rx_distance][nearest_fc]['tx_gain']
@@ -845,7 +847,7 @@ class Signal_Utils_Rfsoc(Signal_Utils):
         client_piradio.set_gain(trx='rx', chan=1, gain_db=rx_gain_optimal)
         client_piradio.set_gain(trx='tx', chan=0, gain_db=tx_gain_optimal)
         client_piradio.set_gain(trx='tx', chan=1, gain_db=tx_gain_optimal)
-        if 'master' in self.mode:
+        if 'master' in self.mode: # set gains in controller for master mode
             client_controller.set_gain_piradio(trx='tx', chan=0, gain_db=tx_gain_optimal)
             client_controller.set_gain_piradio(trx='tx', chan=1, gain_db=tx_gain_optimal)
 
@@ -898,19 +900,19 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             title = 'RX signal in time domain (zoomed) for antenna {}'.format(ant_id)
             xlabel = 'Time (s)'
             ylabel = 'Magnitude'
-            n = 4*int(np.round(self.fs_rx/self.f_max))
-            self.plot_signal(x=self.t_rx[:n], sigs=rxtd[plt_frm_id, ant_id,:n], mode='time_IQ', scale='linear', title=title, xlabel=xlabel, ylabel=ylabel, legend=True, plot_level=4)
+            n = 4*int(np.round(self.fs_rx/self.f_max)) # number of samples to plot in time domain
+            self.plot_signal(x=self.t_rx[:n], sigs=rxtd[plt_frm_id, ant_id,:n], mode='time_IQ', scale='linear', title=title, xlabel=xlabel, ylabel=ylabel, legend=True, plot_level=4) # plot first n samples
 
         if self.mixer_mode == 'digital' and self.mix_freq!=0:
-            rxtd_base = np.zeros_like(rxtd)
+            rxtd_base = np.zeros_like(rxtd) # Initialize the downconverted signal array
             for ant_id in range(self.n_rx_ant):
                 for frm_id in range(n_rd_rep):
-                    rxtd_base[frm_id, ant_id,:] = self.freq_shift(rxtd[frm_id, ant_id], shift=-1*self.mix_freq, fs=self.fs_rx)
+                    rxtd_base[frm_id, ant_id,:] = self.freq_shift(rxtd[frm_id, ant_id], shift=-1*self.mix_freq, fs=self.fs_rx) # Downconvert the received signal to baseband
 
                 title = 'RX signal spectrum after downconversion for antenna {}'.format(ant_id)
                 xlabel = 'Frequency (MHz)'
                 ylabel = 'Magnitude (dB)'
-                self.plot_signal(x=self.freq_rx, sigs=rxtd_base[plt_frm_id, ant_id], mode='fft', scale='dB20', title=title, xlabel=xlabel, ylabel=ylabel, plot_level=4)
+                self.plot_signal(x=self.freq_rx, sigs=rxtd_base[plt_frm_id, ant_id], mode='fft', scale='dB20', title=title, xlabel=xlabel, ylabel=ylabel, plot_level=4) # plot spectrum after downconversion
         else:
             rxtd_base = rxtd.copy()
 
@@ -928,26 +930,26 @@ class Signal_Utils_Rfsoc(Signal_Utils):
 
         for ant_id in range(self.n_rx_ant):
             # n_samples = min(len(txtd_base), len(rxtd_base))
-            txfd_base_ = np.abs(fftshift(fft(txtd_base[ant_id,:self.n_samples])))
-            rxfd_base_ = np.abs(fftshift(fft(rxtd_base[plt_frm_id, ant_id,:self.n_samples])))
+            txfd_base_ = np.abs(fftshift(fft(txtd_base[ant_id,:self.n_samples]))) # Transmitted signal spectrum in base-band. fftshift: 把 0Hz (直流) 搬到数组中间，方便看图
+            rxfd_base_ = np.abs(fftshift(fft(rxtd_base[plt_frm_id, ant_id,:self.n_samples]))) # Received signal spectrum in base-band
 
             title = 'TX and RX signals spectrum in base-band for antenna {}'.format(ant_id)
             xlabel = 'Frequency (MHz)'
             ylabel = 'Magnitude (dB)'
-            scale = np.max(txfd_base_)/np.max(rxfd_base_)
+            scale = np.max(txfd_base_)/np.max(rxfd_base_) # Scale factor to align TX and RX spectra 发射信号最大值 / 接收信号最大值
             self.print("TX to RX spectrum scale for antenna {}: {:0.3f}".format(ant_id, scale), thr=4)
-            xlim=(-2*self.f_max/1e6, 2*self.f_max/1e6)
+            xlim=(-2*self.f_max/1e6, 2*self.f_max/1e6) # Frequency limits for plotting 频率范围限制在 ±2*f_max 之间
             f1=np.abs(self.freq - xlim[0]).argmin()
-            f2=np.abs(self.freq - xlim[1]).argmin()
+            f2=np.abs(self.freq - xlim[1]).argmin() # Find indices corresponding to xlim 找到对应 xlim 的索引, argmin: 找索引的技巧，找到离 xlim 最近的数组下标
             ylim=(np.min(rxfd_base_[f1:f2]*scale), 1.1*np.max(rxfd_base_[f1:f2]*scale))
             self.plot_signal(x=self.freq, sigs={"txfd_base":txfd_base_, "Scaled rxfd_base":rxfd_base_*scale}, scale='dB20', title=title, xlabel=xlabel, ylabel=ylabel, xlim=xlim, ylim=ylim, legend=True, plot_level=5)
-            self.print("txfd_base max freq for antenna {}: {} MHz".format(ant_id, self.freq[(self.nfft>>1)+np.argmax(txfd_base_[self.nfft>>1:])]), thr=4)
+            self.print("txfd_base max freq for antenna {}: {} MHz".format(ant_id, self.freq[(self.nfft>>1)+np.argmax(txfd_base_[self.nfft>>1:])]), thr=4) # >> 1：这是位运算“右移一位”。在二进制里，右移一位等于 除以 2 并取整. 只看右半边 txfd_base_[self.nfft>>1:].
             self.print("rxfd_base max freq for antenna {}: {} MHz".format(ant_id, self.freq[(self.nfft>>1)+np.argmax(rxfd_base_[self.nfft>>1:])]), thr=4)
 
-
-        if 'pilot_separate' in self.rx_chain:
+        # sychronization and channel estimation/equalization
+        if 'pilot_separate' in self.rx_chain: # if pilot symbols are sent separately, double the number of samples for RX processing [导频部分 + 数据部分]
             n_samples_rx = self.n_samples_trx * 2
-        else:
+        else: # if pilot symbols are sent together with data symbols, keep the same number of samples for RX processing [only data part]
             n_samples_rx = self.n_samples_trx
 
         txtd_base = txtd_base[:,:self.n_samples_trx]
@@ -961,28 +963,28 @@ class Signal_Utils_Rfsoc(Signal_Utils):
                     sync_frac = True
                 else:
                     sync_frac = False
-                rxtd_base_s_ = self.sync_time(rxtd_base[frm_id], txtd_base, sc_range=self.sc_range, rx_same_delay=self.rx_same_delay, sync_frac=sync_frac)
+                rxtd_base_s_ = self.sync_time(rxtd_base[frm_id], txtd_base, sc_range=self.sc_range, rx_same_delay=self.rx_same_delay, sync_frac=sync_frac) # sychronize in time domain
                 rxtd_base_s.append(rxtd_base_s_)
             rxtd_base_s = np.array(rxtd_base_s)
         else:
             rxtd_base_s = rxtd_base.copy()
             rxtd_base_s = np.stack((rxtd_base_s, rxtd_base_s), axis=2)
         
-        if 'sync_freq' in self.rx_chain:
-            cfo_coarse = self.estimate_cfo(txtd_base, rxtd_base_s, mode='coarse', sc_range=self.sc_range)
-            rxtd_base_t = self.sync_frequency(rxtd_base_s, cfo_coarse, mode='time')
-            cfo_fine = self.estimate_cfo(txtd_base, rxtd_base_t, mode='fine', sc_range=self.sc_range)
+        if 'sync_freq' in self.rx_chain: # frequency synchronization
+            cfo_coarse = self.estimate_cfo(txtd_base, rxtd_base_s, mode='coarse', sc_range=self.sc_range) # coarse CFO estimation
+            rxtd_base_t = self.sync_frequency(rxtd_base_s, cfo_coarse, mode='time') # compensate coarse CFO in time domain
+            cfo_fine = self.estimate_cfo(txtd_base, rxtd_base_t, mode='fine', sc_range=self.sc_range) # fine CFO estimation
             cfo = cfo_coarse + cfo_fine
             rxtd_base_s = self.sync_frequency(rxtd_base_s, cfo, mode='time')
 
         if 'pilot_separate' in self.rx_chain:
-            rxtd_pilot_s = rxtd_base_s[:,:,:,:n_samples_rx//2]
-            rxtd_base_s = rxtd_base_s[:,:,:,n_samples_rx//2:]
+            rxtd_pilot_s = rxtd_base_s[:,:,:,:n_samples_rx//2] # separate pilot symbols: 前一半是导频 (Pilot) -> 用来估计信道
+            rxtd_base_s = rxtd_base_s[:,:,:,n_samples_rx//2:] # 后一半是数据 (Data) -> 用来解调数据
         else:
-            rxtd_pilot_s = rxtd_base_s.copy()
+            rxtd_pilot_s = rxtd_base_s.copy() # 如果没开分离模式，那导频和数据就是同一个东西
         
 
-        rxtd_base = np.stack((rxtd_base_s[:,0,0,:self.n_samples_trx], rxtd_base_s[:,1,0,:self.n_samples_trx]), axis=1)
+        rxtd_base = np.stack((rxtd_base_s[:,0,0,:self.n_samples_trx], rxtd_base_s[:,1,0,:self.n_samples_trx]), axis=1) # reshape to [n_rd_rep, n_rx_ant, n_samples_trx]
         rxtd_pilot = np.stack((rxtd_pilot_s[:,0,0,:self.n_samples_trx], rxtd_pilot_s[:,1,0,:self.n_samples_trx]), axis=1)
         
         if 'channel_est' in self.rx_chain:
@@ -995,25 +997,28 @@ class Signal_Utils_Rfsoc(Signal_Utils):
             if 'sparse_est' in self.rx_chain:
                 h = []
                 for frm_id in range(n_rd_rep):
-                    h_est_full, H_est, H_est_max = self.channel_estimate(txtd_base, rxtd_pilot_s[frm_id], sys_response=self.sys_response, sc_range_ch=self.sc_range_ch, snr_est=snr_est)
+                    h_est_full, H_est, H_est_max = self.channel_estimate(txtd_base, rxtd_pilot_s[frm_id], sys_response=self.sys_response, sc_range_ch=self.sc_range_ch, snr_est=snr_est) # 基础估计：先算个大概
                     h.append(h_est_full)
                 h = np.array(h)
                 h = h.transpose(3,1,2,0)
-                g = self.sys_response.copy()
-                if g is not None:
-                    g = g.transpose(2,0,1)
+                g = self.sys_response.copy() # 这里的 self.sys_response 是在 process_sys_response() 里算好的系统响应
+                if g is not None: # $$h = (\text{真实的多径}) \otimes (\text{系统硬件响应 } g)$$
+                    g = g.transpose(2,0,1) # 把原来的 第2号 维度搬到最前面，原来的 第0号 维度放在中间，原来的 第1号 维度放在最后
                 ndly = 5000
                 sparse_est_params = self.sparse_est(h=h, g=g, sc_range_ch=self.sc_range_ch, npaths=self.nf_npath_max, nframe_avg=1, ndly=ndly, drange=self.sparse_ch_samp_range, cv=True, n_ignore=self.sparse_ch_n_ignore)
             else:
                 h_est_full, H_est, H_est_max = self.channel_estimate(txtd_base, rxtd_pilot_s, sys_response=self.sys_response, sc_range_ch=self.sc_range_ch, snr_est=snr_est)
             
+            # 估算 MIMO 参数：
+            # rx_phase_list: 接收相位变化（用来做相位跟踪）
+            # aoa_list: 到达角 (Angle of Arrival)，信号是从哪个方向来的
             self.rx_phase_list, self.aoa_list = self.estimate_mimo_params(txtd_base, rxtd_pilot, self.fc, h_est_full, H_est_max, self.rx_phase_list, self.aoa_list)
             if len(self.rx_phase_list)>self.nfft_trx//10:
-                self.rx_phase_list.pop(0)
+                self.rx_phase_list.pop(0) # 弹出（删除）并返回 列表里 索引为 0 的元素。
             if len(self.aoa_list)>self.nfft_trx//10:
                 self.aoa_list.pop(0)
         else:
-            h_est_full = np.ones((self.n_rx_ant, self.n_tx_ant, self.n_samples_ch), dtype=complex)
+            h_est_full = np.ones((self.n_rx_ant, self.n_tx_ant, self.n_samples_ch), dtype=complex) # unity channel if no channel estimation
             H_est = np.ones((self.n_rx_ant, self.n_tx_ant), dtype=complex)
             H_est_max = H_est.copy()
         if 'channel_eq' in self.rx_chain and 'channel_est' in self.rx_chain:
@@ -1106,7 +1111,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
         self.plot_colors = ['#57068C', 'orange', 'green', 'red', 'blue', 'brown', 'pink', 'gray', 'olive', 'cyan']
         # set matplotlib axes color cycle so subsequent ax.plot calls use our colors by default
         try:
-            mpl.rcParams['axes.prop_cycle'] = cycler('color', self.plot_colors)
+            mpl.rcParams['axes.prop_cycle'] = cycler('color', self.plot_colors) # 设置默认颜色循环
         except Exception:
             # fail silently if matplotlib/cycler are not available at init time
             pass
@@ -1124,16 +1129,16 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         # TODO: Move it to the signal utils
 
-        if len(self.turtlebot_publish_list)>0:
+        if len(self.turtlebot_publish_list)>0: # turtlebot publishing is enabled
             from tb4_aoa_viz.aoa_bridge import get_publish_aoa_fn
             from tb4_aoa_viz.snr_bridge import get_publish_snr_fn
         if "aoa" in self.turtlebot_publish_list:
-            self.publish_aoa_turtlebot = get_publish_aoa_fn("/aoa_angle")
+            self.publish_aoa_turtlebot = get_publish_aoa_fn("/aoa_angle") # create the AOA publishing function
         if "snr" in self.turtlebot_publish_list:
-            self.publish_snr_turtlebot = get_publish_snr_fn("/snr_db")
+            self.publish_snr_turtlebot = get_publish_snr_fn("/snr_db") # create the SNR publishing function
         else:
-            self.publish_aoa_turtlebot = lambda x: None
-            self.publish_snr_turtlebot = lambda x: None
+            self.publish_aoa_turtlebot = lambda x: None # no-op if turtlebot publishing is not enabled
+            self.publish_snr_turtlebot = lambda x: None # no-op if turtlebot publishing is not enabled
 
 
 
@@ -1280,18 +1285,18 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
                 sig, title_post = self.signals_obj.process_sig(sig, process_list=signal_process_list)
                 title += title_post
-                label = "RX {}/TX {}".format(rx_id, tx_id)
+                label = "RX {}/TX {}".format(rx_id, tx_id) # base label
                 if 'real' in signal_process_list:
                     label += "-Real"
                 if 'imag' in signal_process_list:
                     label += "-Imag"
 
 
-                if sig_final is None:
+                if sig_final is None: # first signal in the plot
                     sig_final = sig.copy()
                     label_final = label
 
-                if index>0 and plot[index-1] in supported_operations:
+                if index>0 and plot[index-1] in supported_operations: # apply operation with previous signal
                     operation = plot[index-1]
                     if operation == '+':
                         sig_final += sig
@@ -1304,7 +1309,7 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
                     label_final += operation + label
 
-                if not (len(plot) > index+1 and plot[index+1] in supported_operations):
+                if not (len(plot) > index+1 and plot[index+1] in supported_operations): # if next item is not an operation, finalize the current signal
                     # if "phase" in signal_process_list:
                     #     sig_final = np.unwrap(sig_final)
                     plot_signals.append({'signal_name': signal_name, 'trx_id':[rx_id, tx_id], 'process_list': signal_process_list, 'x': x, 'data': sig_final, 'label': label_final})
@@ -1369,16 +1374,16 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
         if sigs_save is None:
             if channels_save is None:
-                rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
+                rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once') # receive RX TD data from RFSoC
             else:
                 rxtd = None
         else:
-            rxtd = sigs_save['rxtd_{:.1f}'.format(self.signals_obj.fc/1e9)][self.read_id*self.n_rd_rep:(self.read_id+1)*self.n_rd_rep]
+            rxtd = sigs_save['rxtd_{:.1f}'.format(self.signals_obj.fc/1e9)][self.read_id*self.n_rd_rep:(self.read_id+1)*self.n_rd_rep] # 根据当前的帧数 (read_id) 切出一小片数据
             txtd_base = sigs_save['txtd'][0]
 
-        if channels_save is None:
+        if channels_save is None: # real-time channel estimation
             while True:
-                (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.signals_obj.rx_operations(txtd_base, rxtd)
+                (rxtd_base, h_est_full, H_est, H_est_max, sparse_est_params) = self.signals_obj.rx_operations(txtd_base, rxtd) # process RX TD data: filtering, synchronization, channel estimation/equalization
 
                 if self.enable_matlab_stream:
                     j = self.signals_obj.fc_id
@@ -1387,19 +1392,19 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     # (txtd_base,txtd) = self.gen_tx_signal()
                     # self.stream_rx_td_to_matlab(txtd)    
                     # self.stream_rx_td_to_matlab(self.freq_hop_list[j])
-                    self.stream_rx_td_to_matlab(rxtd,self.freq_hop_list[j])
+                    self.stream_rx_td_to_matlab(rxtd,self.freq_hop_list[j]) # stream RX TD data and frequency hop info to MATLAB
                     print("Streaming RX TD data to MATLAB done.")
 
                 H_est_full = fft(h_est_full, axis=-1)
-                if sparse_est_params is not None:
+                if sparse_est_params is not None: # if sparse channel estimation is enabled
                     (h_tr, dly_est, peaks, npath_est) = sparse_est_params
-                    if np.min(npath_est) > 0:
+                    if np.min(npath_est) > 0: # if at least one path is detected
                         break
                     else:
                         self.print("Re-estimating channel due to zero paths", thr=0)
-                        rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once')
+                        rxtd = self.signals_obj.receive_data(self.client_rfsoc, n_rd_rep=self.n_rd_rep, mode='once') # receive RX TD data from RFSoC again
                 else:
-                    break
+                    break # no sparse estimation, exit the loop
         else:
             h_est_full = channels_save['h_est_full_{:.1f}'.format(self.signals_obj.fc/1e9)]
 
@@ -1428,18 +1433,18 @@ class Animate_Plot(Signal_Utils_Rfsoc):
     def update(self, frame):
 
         if self.anim_paused:
-            return self.line
+            return self.line # return the current lines without updating
         
         signals, h_est_full, sparse_est_params = self.receive_data_anim(self.txtd_base)
 
-        self.signals_obj.hop_freq(self.client_piradio, self.client_controller)
+        self.signals_obj.hop_freq(self.client_piradio, self.client_controller) # hop to the next frequency
 
         # if self.use_turntable:
         #     angle = self.rotation_angles[self.rot_angle_id]
         #     client_turntable.move_to_position(angle)
         #     self.rot_angle_id = (self.rot_angle_id + 1) % len(self.rotation_angles)
 
-        self.signals_obj.handle_nf(h_est_full, sparse_est_params)
+        self.signals_obj.handle_nf(h_est_full, sparse_est_params) # handle near-field localization if enabled
 
 
         line_id = 0
@@ -1454,21 +1459,21 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                 signal_data = signal['data']
                 signal_process_list = signal['process_list']
                 
-                if 'IQ' in signal_process_list:
+                if 'IQ' in signal_process_list: # IQ plot
                     self.line[line_id][j].set_offsets(np.column_stack((signal_data.real, signal_data.imag)))
                     line_id+=1
-                    margin = max(np.abs(signal_data)) * 0.1
+                    margin = max(np.abs(signal_data)) * 0.1 # 10% margin
                     self.ax[i][j].set_xlim(min(signal_data.real) - margin, max(signal_data.real) + margin)
                     self.ax[i][j].set_ylim(min(signal_data.imag) - margin, max(signal_data.imag) + margin)
                 elif signal_name == 'rx_ph_diff':
                     self.line[line_id][j].set_data(np.arange(len(signal_data)), signal_data)
                     line_id+=1
                 elif signal_name == 'aoa_gauge':
-                    self.publish_aoa_turtlebot(signal_data)
+                    self.publish_aoa_turtlebot(signal_data) # publish AOA to turtlebot
                     snr = self.calculate_snr(sig_td=self.signals_obj.last_rxtd[0,:,:self.n_samples_trx], sig_sc_range=self.sc_range)
                     snr_dB = self.lin_to_db(snr, mode='pow')
-                    self.publish_snr_turtlebot(snr_dB)
-                    self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data))
+                    self.publish_snr_turtlebot(snr_dB) # publish SNR to turtlebot
+                    self.gauge_update_needle(self.ax[i][j], np.rad2deg(signal_data)) # update the gauge needle
                     self.ax[i][j].set_xlim(0, 1)
                     self.ax[i][j].set_ylim(0.5, 1)
                     self.ax[i][j].axis('off')
@@ -1480,12 +1485,12 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     
                     # Plot the raw response
                     dly = np.arange(self.n_samples_ch)
-                    dly = dly - self.n_samples_ch*(dly > self.n_samples_ch/2)
-                    dly = dly / self.fs_trx *1e9
+                    dly = dly - self.n_samples_ch*(dly > self.n_samples_ch/2) # Shift the delay axis 处理 FFT 的正负频率对齐问题，把后半段搬到前面变成负延迟
+                    dly = dly / self.fs_trx *1e9 # Convert to ns
                     chan_pow = self.lin_to_db(np.abs(h_tr), mode='mag')
 
                     # Roll the response and shift the response
-                    rots = self.n_samp_ch_sp//4
+                    rots = self.n_samp_ch_sp//4 # Roll by a quarter of the sparse channel samples 把它往右滚了 1/4 (rots)，把主峰移到画面中间，方便观察。
                     yshift = np.percentile(chan_pow, 25)
                     chan_powr = np.roll(chan_pow, rots) - yshift
                     dlyr = np.roll(dly, rots)
@@ -1500,34 +1505,34 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     peaks_ = np.abs(peaks)**2
                     peaks_  = self.lin_to_db(peaks_, mode='pow')-yshift
                     dly_est = dly_est*1e9
-                    dly_est = dly_est[dly_est<=np.max(dlyr[:self.n_samp_ch_sp])]
-                    self.line[line_id][j].set_data(dly_est, peaks_)
+                    dly_est = dly_est[dly_est<=np.max(dlyr[:self.n_samp_ch_sp])] # only plot peaks within the x-axis range
+                    self.line[line_id][j].set_data(dly_est, peaks_) #dot plot for detected peaks
                     line_id+=1
                     # for dly, peak in zip(dly_est, peaks_):
                     #     # self.line[line_id][j].set_ydata([dly, peak])
                     #     self.line[line_id][j].set_segments([[[dly, ymin], [dly, peak]]])
-                    self.line[line_id][j].set_segments([[[i,ymin], [i,j]] for i,j in zip(dly_est, peaks_)])
+                    self.line[line_id][j].set_segments([[[i,ymin], [i,j]] for i,j in zip(dly_est, peaks_)]) # set segments for stem plot 每一条线段的坐标是从 [时间i, 底部ymin] 到 [时间i, 能量j],视觉效果：从地面垂直向上连一条线，撑住红点。
                     line_id+=1
                     self.ax[i][j].set_ylim([ymin, ymax])
-                elif signal_name == 'nf_loc':
-                    self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est')
+                elif signal_name == 'nf_loc': # near-field localization plot
+                    self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est') # 画出初步估计的位置（通常是一个热力图或者一个十字叉）
                 else:
-                    self.line[line_id][j].set_ydata(signal_data)
+                    self.line[line_id][j].set_ydata(signal_data) # update the y-data of the line 因为对于大多数波形图，X 轴（时间/频率）是固定的，只有波形高低在变。
                     line_id+=1
 
 
             if signal_name in self.mag_filter_list['signal_name'] or any(item in signal_process_list for item in self.mag_filter_list['process_list']):
-                if len(np.array(signal_data).shape)>1:
+                if len(np.array(signal_data).shape)>1: # multiple traces, take the first one for ylim calculation 如果数据是多维的，只取第一个维度来计算统计值
                     sig = signal_data[0]
                 else:
                     sig = signal_data.copy()
-                y_min = np.percentile(sig, 10)
-                y_max = np.max(sig) + 0.1*(np.max(sig)-y_min)
+                y_min = np.percentile(sig, 10) # Calculate the 10th percentile for y-axis lower limit 寻找底噪 (Noise Floor)
+                y_max = np.max(sig) + 0.1*(np.max(sig)-y_min) # Set upper limit with a 10% margin
                 self.ax[i][j].set_ylim(y_min, y_max)
             elif not (signal_name in self.untoched_plot_list['signal_name'] or any(item in signal_process_list for item in self.untoched_plot_list['process_list'])):
                 try:
-                    self.ax[i][j].relim()
-                    self.ax[i][j].autoscale_view()
+                    self.ax[i][j].relim() # Recalculate limits 重新计算边界
+                    self.ax[i][j].autoscale_view() # Autoscale the view to the new limits 自动缩放视图
                 except Exception as e:
                     print("Error in autoscale {}".format(e))
 
@@ -1538,19 +1543,19 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
 
     def init_plots(self):
-        if self.plot_level<0:
+        if self.plot_level<0: # no plots
             return
         
-        signals, _, _ = self.receive_data_anim(self.txtd_base)
+        signals, _, _ = self.receive_data_anim(self.txtd_base) # get initial signals for plotting
         
         # Set up the figure and plot
-        self.line = [[None for j in range(self.n_plots_col)] for i in range(3*self.n_plots_row)]
+        self.line = [[None for j in range(self.n_plots_col)] for i in range(3*self.n_plots_row)] # pre-allocate maximum number of lines per subplot
         self.fig, self.ax = plt.subplots(self.n_plots_row, self.n_plots_col)
-        if type(self.ax) is not np.ndarray:
+        if type(self.ax) is not np.ndarray: # 如果返回的不是数组（只画一张图时），把它包成数组
             self.ax = np.array([self.ax])
-        if len(self.ax.shape)<2:
+        if len(self.ax.shape)<2: # 如果返回的数组维度小于2，把它reshape成2维
             self.ax = self.ax.reshape(-1, 1)
-        self.fig.canvas.mpl_connect('key_press_event', self.toggle_pause)
+        self.fig.canvas.mpl_connect('key_press_event', self.toggle_pause) # connect the pause function to key press event
 
 
         for j in range(self.n_plots_col):
@@ -1565,11 +1570,11 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                     x_data = signal['x']
                 
                     if 'IQ' in signal_process_list:
-                        self.line[line_id][j] = self.ax[i][j].scatter(signal_data.real, signal_data.imag, facecolors='none', edgecolors='b', s=10)
+                        self.line[line_id][j] = self.ax[i][j].scatter(signal_data.real, signal_data.imag, facecolors='none', edgecolors='b', s=10) # scatter plot for IQ
                         line_id+=1
                         self.ax[i][j].axhline(0, color='black',linewidth=0.5)
-                        self.ax[i][j].axvline(0, color='black',linewidth=0.5)
-                        self.ax[i][j].set_aspect('equal')
+                        self.ax[i][j].axvline(0, color='black',linewidth=0.5) # crosshairs at origin
+                        self.ax[i][j].set_aspect('equal') # equal scaling for x and y axes
                         margin = max(np.abs(signal_data)) * 0.1
                         self.ax[i][j].set_xlim(min(signal_data.real)-margin, max(signal_data.real+margin))
                         self.ax[i][j].set_ylim(min(signal_data.imag)-margin, max(signal_data.imag+margin))
@@ -1579,24 +1584,24 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                         self.line[line_id][j], = self.ax[i][j].plot([], [])
                         line_id+=1
                         # (markerline, stemlines, baseline)
-                        self.line[line_id][j], self.line[line_id+1][j], _ = self.ax[i][j].stem([0], [1], 'r-', basefmt='', bottom=-10)
-                        line_id+=2
+                        self.line[line_id][j], self.line[line_id+1][j], _ = self.ax[i][j].stem([0], [1], 'r-', basefmt='', bottom=-10) # stem plot for detected peaks 我们只需要前两个：红点 (marker) 和 垂直线 (stem)
+                        line_id+=2 # increment by 2 for stem plot
 
                     elif signal_name=='aoa_gauge':
-                        self.draw_half_gauge(self.ax[i][j], min_val=-90, max_val=90)
-                        self.gauge_update_needle(self.ax[i][j], 0, min_val=-90, max_val=90)
+                        self.draw_half_gauge(self.ax[i][j], min_val=-90, max_val=90) # draw the gauge
+                        self.gauge_update_needle(self.ax[i][j], 0, min_val=-90, max_val=90) # initialize the needle at 0 deg
                         self.ax[i][j].set_xlim(0, 1)
                         self.ax[i][j].set_ylim(0.5, 1)
-                        self.ax[i][j].axis('off')
+                        self.ax[i][j].axis('off') # turn off the axis
                         
                     elif signal_name=='nf_loc':
-                        self.ax[i][j] = self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est')
-                        self.ax[i][j].set_yticks([])
+                        self.ax[i][j] = self.signals_obj.nf_model.plot_results(self.ax[i][j], RoomModel=self.signals_obj.RoomModel, plot_type='init_est') # 调用外部模型画房间地图
+                        self.ax[i][j].set_yticks([]) #把 Y 轴原本自动生成的刻度数字清空
 
-                        self.ax[i][j].set_xlim(self.nf_region[0])
+                        self.ax[i][j].set_xlim(self.nf_region[0]) # set x-limits to room dimensions
                         self.ax[i][j].set_ylim(self.nf_region[1])
-                        self.ax[i][j].set_xticks(np.arange(self.nf_region[0,0], self.nf_region[0,1], 1.0))
-                        self.ax[i][j].set_yticks(np.arange(self.nf_region[1,0], self.nf_region[1,1], 2.0))
+                        self.ax[i][j].set_xticks(np.arange(self.nf_region[0,0], self.nf_region[0,1], 1.0)) # set x-ticks at every 1 meter 刻度尺
+                        self.ax[i][j].set_yticks(np.arange(self.nf_region[1,0], self.nf_region[1,1], 2.0)) # set y-ticks at every 2 meters 刻度尺
 
                     else:
                         self.line[line_id][j], = self.ax[i][j].plot(x_data, signal_data, label=label)
@@ -1604,8 +1609,8 @@ class Animate_Plot(Signal_Utils_Rfsoc):
 
 
                 # Truncate the title to a maximum of 30 characters
-                title = (signals[i]['title'][:self.plot_fonts_dict['title_max_chars']] + '...') if len(signals[i]['title']) > self.plot_fonts_dict['title_max_chars'] else signals[i]['title']
-                title = title + "\n Carrier Frequency: {} GHz".format(self.freq_hop_list[j]/1e9)
+                title = (signals[i]['title'][:self.plot_fonts_dict['title_max_chars']] + '...') if len(signals[i]['title']) > self.plot_fonts_dict['title_max_chars'] else signals[i]['title'] # truncate title if too long
+                title = title + "\n Carrier Frequency: {} GHz".format(self.freq_hop_list[j]/1e9) # append carrier frequency to title
                 x_label = signals[i]['x_label']
                 y_label = signals[i]['y_label']
                 self.ax[i][j].set_title(title)
@@ -1616,24 +1621,24 @@ class Animate_Plot(Signal_Utils_Rfsoc):
                 self.ax[i][j].xaxis.label.set_fontsize(self.plot_fonts_dict['xaxis_size'])
                 self.ax[i][j].yaxis.label.set_fontsize(self.plot_fonts_dict['yaxis_size'])
                 self.ax[i][j].tick_params(axis='both', which='major', labelsize=self.plot_fonts_dict['ticks_size'])  # For major ticks
-                self.ax[i][j].legend(fontsize=self.plot_fonts_dict['legend_size'])
+                self.ax[i][j].legend(fontsize=self.plot_fonts_dict['legend_size']) # set legend font size
 
                 self.ax[i][j].grid(True)
                 if not (signal_name in self.untoched_plot_list['signal_name'] or any(item in signal_process_list for item in self.untoched_plot_list['process_list'])):
                     self.ax[i][j].relim()
                     self.ax[i][j].autoscale_view()
-                self.ax[i][j].minorticks_on()
+                self.ax[i][j].minorticks_on() # enable minor ticks
 
         for j in range(self.n_plots_col):
             for i in range(len(self.line)):
                 if self.line[i][j] is not None:
                     # self.line[i][j].set_linewidth(3.0-0.5*self.n_plots_row-0.3*self.n_plots_col)
-                    self.line[i][j].set_linewidth(self.plot_fonts_dict['line_width'])
+                    self.line[i][j].set_linewidth(self.plot_fonts_dict['line_width']) # set line width
 
         # Create the animation
-        plt.tight_layout()
+        plt.tight_layout() # automatically adjust subplot parameters to give specified padding
         plt.subplots_adjust(hspace=self.plot_fonts_dict['hspace'], wspace=self.plot_fonts_dict['wspace'])
-        anim = animation.FuncAnimation(self.fig, self.update, frames=int(1e9), interval=self.anim_interval, blit=False)
+        anim = animation.FuncAnimation(self.fig, self.update, frames=int(1e9), interval=self.anim_interval, blit=False) # the Engine starts here 动画引擎
         plt.show()
         self.fig.savefig(self.figs_save_path, dpi=300)
 
@@ -1649,17 +1654,17 @@ class Animate_Plot(Signal_Utils_Rfsoc):
             #s.connect((self.matlab_stream_ip, self.matlab_stream_port))
             #print("Connected to MATLAB stream at {}:{}".format(self.matlab_stream_ip, self.matlab_stream_port))
             #s.close()
-            buf = io.BytesIO()
-            scipy.io.savemat(buf, {'rxtd': rxtd},do_compression=True)
-            scipy.io.savemat(buf, {'freq': freq},do_compression=True)
-            data = buf.getvalue()
+            buf = io.BytesIO() # Create an in-memory bytes buffer
+            scipy.io.savemat(buf, {'rxtd': rxtd},do_compression=True) # Save the rxtd data to the buffer in MATLAB format
+            scipy.io.savemat(buf, {'freq': freq},do_compression=True) # Save the frequency hop info to the buffer in MATLAB format
+            data = buf.getvalue() # Get the byte data from the buffer
             print(len(data), "bytes of rxtd data to be sent to MATLAB stream")
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(.1)
-                sock.connect((self.matlab_stream_ip, self.matlab_stream_port))
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock: # Create a TCP socket
+                sock.settimeout(.1) # Set a timeout for the connection
+                sock.connect((self.matlab_stream_ip, self.matlab_stream_port)) # Connect to the MATLAB stream server
                 sock.sendall(len(data).to_bytes(8, byteorder='big'))  # Send the length of the data first
-                sock.sendall(data)
+                sock.sendall(data) # Send the actual data
                 self.print("rxtd data sent to MATLAB stream at {}:{}".format(self.matlab_stream_ip, self.matlab_stream_port), thr=1)
         
         except Exception as e:
@@ -1673,7 +1678,7 @@ if __name__ == "__main__":
 
     signals_inst = Signal_Utils_Rfsoc(params)
     # signals_inst.collect_signals()
-    signals_inst.compute_sys_response()
+    signals_inst.compute_sys_response() # compute system response 以后再做实验时，所有收到的信号都会先除以这个 g，把硬件造成的畸变抵消掉，只留下真实的信道反射信息。
 
 
 

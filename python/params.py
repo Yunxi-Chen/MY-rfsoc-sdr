@@ -37,7 +37,7 @@ class Params_Class_Default(object):
         self.mix_freq=1000e6                # Mixer carrier frequency
         self.mix_phase_off=0.0              # Mixer's phase offset
         self.do_mixer_settings=False        # If True, performs mixer settings
-        self.do_pll_settings=False          # If True, performs PLL settings
+        self.do_pll_settings=False          # If True, performs Phase-Locked Loop settings
         self.lmk_freq_mhz=122.88            # LMK frequency in MHz
         self.lmx_freq_mhz=3932.16           # LMX frequency in MHz
 
@@ -100,7 +100,7 @@ class Params_Class_Default(object):
         self.n_samples=1024                         # Number of samples
         self.nfft=self.n_samples                    # Number of FFT points
         self.sig_gen_mode = 'fft'                   # Signal generation mode, time, or fft or ofdm, or ZadoffChu
-        self.sig_mode='wideband_null'               # Signal mode, tone_1 or tone_2 or wideband or wideband_null or load
+        self.sig_mode='wideband_null'               # Signal mode, tone_1 or tone_2 or wideband or wideband_null or load 宽带信号，在某些特定的位置（比如中心直流位置）不发信号，留空
         self.sig_modulation = '4qam'                # Signal modulation type for sounding, 4qam, 16qam, etc
         self.tx_sig_sim = 'same'                    # TX signal similarity between antennas, same or orthogonal or shifted
         self.sig_gain_db=0                          # Transmitter Signal gain in dB
@@ -108,11 +108,11 @@ class Params_Class_Default(object):
         self.n_frame_rd=2                           # Number of frames to read
         self.n_rd_rep=8                             # Number of read repetitions for RX signal
         self.snr_est_db=40                          # SNR for signal estimation
-        self.wb_bw_mode='sc'                        # Wideband signal bandwidth mode, sc or freq
+        self.wb_bw_mode='sc'                        # Wideband signal bandwidth mode, sc or freq 在定义宽带信号的带宽时，使用‘子载波的数量’作为单位，而不是用‘赫兹(Hz)’
         self.wb_sc_range=[-250,250]                 # Wideband signal subcarrier range, used when wb_bw_mode is sc
         self.wb_bw_range=[-250e6,250e6]             # Wideband signal bandwidth range, used when wb_bw_mode is freq
         self.wb_null_sc=0                           # Number of carriers to null in the wideband signal
-        self.tone_f_mode='sc'                       # Tone signal frequency mode, sc or freq
+        self.tone_f_mode='sc'                       # Tone signal frequency mode, sc or freq 单音信号：只有一个频率的信号
         self.sc_tone=10                             # Tone signal subcarrier
         self.f_tone=10.0 * self.fs_tx / self.nfft   # Tone signal frequency
         self.filter_bw_range=[-450e6,450e6]         # Final filter BW range on the RX signal
@@ -189,7 +189,7 @@ class Params_Class_Default(object):
     def calc_params(self):
 
         if 'h_sparse' in self.animate_plot_mode and 'sparse_est' not in self.rx_chain:
-            self.rx_chain.append('sparse_est')
+            self.rx_chain.append('sparse_est') #稀疏估计
 
         system_info = platform.uname()
         if "pynq" in system_info.node.lower():
@@ -270,7 +270,7 @@ class Params_Class_Default(object):
         self.fc = self.freq_hop_list[0]
         self.wl = self.c / self.fc
         self.ant_dx = self.ant_dx_m/self.wl             # Antenna spacing in wavelengths (lambda)
-        self.ant_dy = self.ant_dy_m/self.wl
+        self.ant_dy = self.ant_dy_m/self.wl             # 计算归一化距离：天线通常不关心天线隔了多少米，而关心隔了多少个波长
 
         if self.board=='rfsoc_2x2':
             self.adc_bits = 12
@@ -279,6 +279,7 @@ class Params_Class_Default(object):
             self.adc_bits = 14
             self.dac_bits = 14
 
+        #random seed list for TX signals
         if self.tx_sig_sim=='same':
             self.seed_list = [self.seed for i in range(self.n_tx_ant)]
         elif self.tx_sig_sim=='orthogonal':
@@ -303,6 +304,7 @@ class Params_Class_Default(object):
         self.beam_test = np.array([1, 5, 9, 13, 17, 21, 25, 29, 32, 35, 39, 43, 47, 51, 55, 59, 63])
         self.DynamicPLLConfig = (0, self.lmk_freq_mhz, self.lmx_freq_mhz)
 
+        # mutual conversion between tone frequency and subcarrier
         if self.tone_f_mode=='sc':
             self.f_tone = self.sc_tone * self.fs_tx/self.nfft_tx
         elif self.tone_f_mode=='freq':
@@ -367,7 +369,7 @@ class Params_Class_Default(object):
                 t = self.ant_dx_m * np.arange(self.n_tx_ant)
                 self.nf_tx_ant_loc[:,m,:] = self.nf_tx_loc + t[:,None]*self.nf_tx_sep_dir[None,:]
 
-        if self.use_turntable:
+        if self.use_turntable: #if enabling the turntable
             self.rotation_angles = np.arange(self.rotation_range_deg[0], self.rotation_range_deg[1]+self.rotation_step_deg, self.rotation_step_deg)
         else:
             self.rotation_angles = [0]
